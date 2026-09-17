@@ -404,9 +404,6 @@ fm_backend_orca_worktree_ref_valid() {  # <value>
     /*) ;;
     *) return 1 ;;
   esac
-  case "$worktree_path" in
-    *$'\n'*|*$'\r'*|*$'\t'*) return 1 ;;
-  esac
 }
 
 fm_backend_validate_task_endpoint() {  # <meta-file> <task-id>
