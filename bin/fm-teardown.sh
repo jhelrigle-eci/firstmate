@@ -1150,17 +1150,13 @@ meta_value() {
 }
 
 require_orca_worktree_id() {
-  local meta=$1 raw
-  raw=$(meta_value "$meta" orca_worktree_id)
-  if [ -z "$raw" ]; then
+  local meta=$1 id
+  id=$(meta_value "$meta" orca_worktree_id)
+  if [ -z "$id" ]; then
     echo "error: missing orca_worktree_id in $meta; cannot remove Orca worktree" >&2
     return 1
   fi
-  if ! fm_backend_orca_worktree_ref_valid "$raw"; then
-    echo "error: malformed orca_worktree_id in $meta; cannot remove Orca worktree" >&2
-    return 1
-  fi
-  printf '%s\n' "$raw"
+  printf '%s\n' "$id"
 }
 
 require_orca_terminal() {
