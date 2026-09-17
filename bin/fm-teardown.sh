@@ -1156,11 +1156,11 @@ require_orca_worktree_id() {
     echo "error: missing orca_worktree_id in $meta; cannot remove Orca worktree" >&2
     return 1
   fi
-  if ! fm_backend_orca_worktree_ref_parse "$raw"; then
+  if ! fm_backend_orca_worktree_ref_valid "$raw"; then
     echo "error: malformed orca_worktree_id in $meta; cannot remove Orca worktree" >&2
     return 1
   fi
-  printf '%s\n' "$FM_BACKEND_ORCA_WORKTREE_ID"
+  printf '%s\n' "$raw"
 }
 
 require_orca_terminal() {
@@ -2077,11 +2077,6 @@ EOF
 
 require_orca_worktree_path_match() {
   local worktree_id=$1 inspected=$2 resolved inspected_abs resolved_abs
-  if ! fm_backend_orca_worktree_ref_parse "$worktree_id"; then
-    echo "REFUSED: Orca endpoint metadata for task $ID has malformed orca_worktree_id; preserving metadata." >&2
-    return 1
-  fi
-  worktree_id=$FM_BACKEND_ORCA_WORKTREE_ID
   resolved=$(fm_backend_worktree_path orca "$worktree_id") || {
     echo "REFUSED: cannot resolve Orca worktree id $worktree_id to a path; preserving metadata." >&2
     return 1

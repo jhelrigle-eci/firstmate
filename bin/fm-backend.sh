@@ -388,38 +388,24 @@ fm_backend_endpoint_atom_valid() {  # <value>
   esac
 }
 
-fm_backend_endpoint_abs_path_valid() {  # <value>
-  local path=$1
-  [ -n "$path" ] || return 1
-  case "$path" in
+# Orca's canonical worktree id is "<repo id>::<absolute worktree path>" and is
+# the only token Orca resolves, so records carry it whole and every addressing
+# call passes it through unmodified. Validation checks that exact shape.
+fm_backend_orca_worktree_ref_valid() {  # <value>
+  local value=$1 repo_id worktree_path
+  case "$value" in
+    *"::"*) ;;
+    *) return 1 ;;
+  esac
+  repo_id=${value%%::*}
+  worktree_path=${value#*::}
+  fm_backend_endpoint_atom_valid "$repo_id" || return 1
+  case "$worktree_path" in
     /*) ;;
     *) return 1 ;;
   esac
-  case "$path" in
+  case "$worktree_path" in
     *$'\n'*|*$'\r'*|*$'\t'*) return 1 ;;
-  esac
-}
-
-# Orca records can carry either a plain worktree id atom or the legacy
-# "<id>::<absolute path>" composite shape. Validation keeps the id strict for
-# endpoint addressing while accepting existing composite records.
-fm_backend_orca_worktree_ref_parse() {  # <value>
-  local value=$1 worktree_id worktree_path
-  FM_BACKEND_ORCA_WORKTREE_ID=
-  FM_BACKEND_ORCA_WORKTREE_PATH=
-  case "$value" in
-    *"::"*)
-      worktree_id=${value%%::*}
-      worktree_path=${value#*::}
-      fm_backend_endpoint_atom_valid "$worktree_id" || return 1
-      fm_backend_endpoint_abs_path_valid "$worktree_path" || return 1
-      FM_BACKEND_ORCA_WORKTREE_ID=$worktree_id
-      FM_BACKEND_ORCA_WORKTREE_PATH=$worktree_path
-      ;;
-    *)
-      fm_backend_endpoint_atom_valid "$value" || return 1
-      FM_BACKEND_ORCA_WORKTREE_ID=$value
-      ;;
   esac
 }
 
@@ -543,7 +529,7 @@ fm_backend_validate_task_endpoint() {  # <meta-file> <task-id>
       }
       if [ "$window" != "fm-$id" ] \
         || ! fm_backend_endpoint_atom_valid "$terminal" \
-        || ! fm_backend_orca_worktree_ref_parse "$worktree_id"; then
+        || ! fm_backend_orca_worktree_ref_valid "$worktree_id"; then
         echo "REFUSED: Orca endpoint metadata for task $id is malformed or inconsistent; preserving task state." >&2
         return 1
       fi

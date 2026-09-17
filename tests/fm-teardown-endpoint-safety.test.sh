@@ -296,6 +296,19 @@ test_supported_backend_endpoint_records_validate() {
   assert_contains "$(cat "$dir/orca-malformed.err")" "Orca endpoint metadata for task $id is malformed or inconsistent" \
     "malformed Orca worktree identity refusal did not match the endpoint guard"
 
+  id=orca-task-plain-id
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=fm-$id" "endpoint_task_id=$id" "terminal=term-9" \
+    "worktree=$dir/worktree" "project=$dir/project" "backend=orca" \
+    "orca_worktree_id=worktree-9"
+  set +e
+  fm_backend_validate_task_endpoint "$dir/home/state/$id.meta" "$id" >/dev/null 2>"$dir/orca-plain.err"
+  target=$?
+  set -e
+  [ "$target" -ne 0 ] || fail "an Orca worktree id without the canonical <repo id>::<path> shape should refuse"
+  assert_contains "$(cat "$dir/orca-plain.err")" "Orca endpoint metadata for task $id is malformed or inconsistent" \
+    "non-canonical Orca worktree identity refusal did not match the endpoint guard"
+
   id=cmux-task
   fm_write_meta "$dir/home/state/$id.meta" \
     "window=workspace-1:surface-2" "endpoint_task_id=$id" "worktree=$dir/worktree" "project=$dir/project" \
@@ -1272,7 +1285,7 @@ test_orca_close_failure_refuses_even_under_force() {
   fm_write_meta "$dir/home/state/$id.meta" \
     "window=fm-$id" "endpoint_task_id=$id" "terminal=term-7" \
     "worktree=$dir/nonexistent-worktree" "project=$dir/nonexistent-project" \
-    "backend=orca" "orca_worktree_id=worktree-9" "kind=ship" "mode=no-mistakes"
+    "backend=orca" "orca_worktree_id=repo-9::$dir/nonexistent-worktree" "kind=ship" "mode=no-mistakes"
 
   set +e
   env -u TMUX -u TMUX_PANE \
