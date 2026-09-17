@@ -1518,6 +1518,7 @@ tests/fm-bootstrap.test.sh
 ```
 
 The fake-Orca suite covers readiness, registration, create response parsing, metadata routing, popup-safe submit, and path-matched release refusal.
+It also holds the recorded worktree id to Orca's canonical composite shape, owned by [`orca-backend.md`](../orca-backend.md#task-shape-and-metadata): the fake `orca` refuses any `--worktree id:` argument that is not the recorded id verbatim, so a truncated or rewritten id fails the suite, and `tests/fm-teardown-endpoint-safety.test.sh` covers the endpoint-guard refusal of a non-composite record.
 
 ## cmux
 
