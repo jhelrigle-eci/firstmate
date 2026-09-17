@@ -392,7 +392,14 @@ fm_lint_run_backend_purity() {
   }
 }
 
-JOBS=${FM_LINT_JOBS:-2}
+if [ -n "${FM_LINT_JOBS:-}" ]; then
+  JOBS=$FM_LINT_JOBS
+elif [ "${GITHUB_ACTIONS:-}" = true ] || [ "${CI:-}" = true ]; then
+  # CI runners have tighter memory bounds; one ShellCheck shard avoids OOM kills.
+  JOBS=1
+else
+  JOBS=2
+fi
 TELEMETRY=${FM_LINT_TELEMETRY:-}
 FAST=0
 ANALYSIS_MODE=full
