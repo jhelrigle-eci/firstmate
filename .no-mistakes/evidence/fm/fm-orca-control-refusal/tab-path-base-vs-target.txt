@@ -1,0 +1,20 @@
+=== base (pre-change) ===
+### tree: /tmp/fm-base
+### recorded orca_worktree_id=d5602dfb-f2a9-4aba-873f-613704bac338::/tmp/orca-repro-basetab.Srxe6w/work	tree
+$ fm-teardown.sh lorewopagingdemo
+REFUSED: task lorewopagingdemo has malformed endpoint metadata; preserving task state.
+exit=1
+--- orca CLI calls firstmate made ---
+--- task record after teardown ---
+STILL PRESENT: /tmp/orca-repro-basetab.Srxe6w/state/lorewopagingdemo.meta (task state preserved)
+
+=== target (post-change) ===
+### tree: /Users/jhelrigle/.no-mistakes/worktrees/1f0ca6dcf975/01M2QRGGWGV62VTEDHV7YG881N
+### recorded orca_worktree_id=d5602dfb-f2a9-4aba-873f-613704bac338::/tmp/orca-repro-tabpath.QOxrnK/work	tree
+$ fm-teardown.sh lorewopagingdemo
+REFUSED: task lorewopagingdemo has malformed endpoint metadata; preserving task state.
+exit=1
+--- orca CLI calls firstmate made ---
+--- task record after teardown ---
+STILL PRESENT: /tmp/orca-repro-tabpath.QOxrnK/state/lorewopagingdemo.meta (task state preserved)
+

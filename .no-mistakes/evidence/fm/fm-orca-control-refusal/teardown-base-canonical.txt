@@ -1,0 +1,9 @@
+### tree: /tmp/fm-base
+### recorded orca_worktree_id=d5602dfb-f2a9-4aba-873f-613704bac338::/tmp/orca-repro-base.MCPklQ/worktree
+$ fm-teardown.sh lorewopagingdemo
+REFUSED: Orca endpoint metadata for task lorewopagingdemo is malformed or inconsistent; preserving task state.
+exit=1
+--- orca CLI calls firstmate made ---
+--- task record after teardown ---
+STILL PRESENT: /tmp/orca-repro-base.MCPklQ/state/lorewopagingdemo.meta (task state preserved)
+

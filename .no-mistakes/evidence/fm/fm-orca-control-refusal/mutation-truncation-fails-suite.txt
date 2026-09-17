@@ -1,0 +1,7 @@
+Mutation check: re-introduce id truncation (worktree_id=${worktree_id%%::*}) in bin/backends/orca.sh addressing calls,
+then run tests/fm-backend-orca.test.sh against that mutated copy.
+
+ok - fm_backend_target_exists: Orca ok:false read JSON is not live
+not ok - Orca scout teardown should succeed once report exists
+REFUSED: cannot resolve Orca worktree id d5602dfb-f2a9-4aba-873f-613704bac338::/private/var/folders/g6/0gj1pwrs36b6zr82g1t8cwwh0000gp/T/fm-backend-orca-tests.utFNuC/teardown-wt to a path; preserving metadata.: expected exit 0, got 1
+script exit=1

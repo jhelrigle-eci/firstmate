@@ -1,0 +1,13 @@
+### tree: /Users/jhelrigle/.no-mistakes/worktrees/1f0ca6dcf975/01M2QRGGWGV62VTEDHV7YG881N
+### recorded orca_worktree_id=d5602dfb-f2a9-4aba-873f-613704bac338::/tmp/orca-repro-target.tXFvMy/worktree
+$ fm-teardown.sh lorewopagingdemo
+teardown lorewopagingdemo complete (window term-lore, worktree /tmp/orca-repro-target.tXFvMy/worktree)
+Backlog: lorewopagingdemo just finished (this home keeps no markdown backlog at /private/tmp/orca-repro-target.tXFvMy/data/backlog.md). Update /private/tmp/orca-repro-target.tXFvMy/data/backlog.md - move lorewopagingdemo to Done, keep Done to the 10 most recent, then re-scan Queued and dispatch only work whose blockers are gone and date is due.
+exit=0
+--- orca CLI calls firstmate made ---
+orca worktree show --worktree id:d5602dfb-f2a9-4aba-873f-613704bac338::/tmp/orca-repro-target.tXFvMy/worktree --json
+orca terminal close --terminal term-lore --json
+orca worktree rm --worktree id:d5602dfb-f2a9-4aba-873f-613704bac338::/tmp/orca-repro-target.tXFvMy/worktree --force --json
+--- task record after teardown ---
+removed: state/lorewopagingdemo.meta (task disposed)
+
