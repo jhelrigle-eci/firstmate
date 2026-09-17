@@ -278,9 +278,23 @@ test_supported_backend_endpoint_records_validate() {
   id=orca-task
   fm_write_meta "$dir/home/state/$id.meta" \
     "window=fm-$id" "endpoint_task_id=$id" "terminal=term-7" \
-    "worktree=$dir/worktree" "project=$dir/project" "backend=orca" "orca_worktree_id=worktree-9"
+    "worktree=$dir/worktree" "project=$dir/project" "backend=orca" \
+    "orca_worktree_id=d5602dfb-f2a9-4aba-873f-613704bac338::$dir/worktree"
   fm_backend_validate_task_endpoint "$dir/home/state/$id.meta" "$id" || fail "valid Orca endpoint refused"
   [ "$FM_BACKEND_VALIDATED_TARGET" = term-7 ] || fail "Orca validation did not select its terminal"
+
+  id=orca-task-malformed
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=fm-$id" "endpoint_task_id=$id" "terminal=term-8" \
+    "worktree=$dir/worktree" "project=$dir/project" "backend=orca" \
+    "orca_worktree_id=::not-an-absolute-path"
+  set +e
+  fm_backend_validate_task_endpoint "$dir/home/state/$id.meta" "$id" >/dev/null 2>"$dir/orca-malformed.err"
+  target=$?
+  set -e
+  [ "$target" -ne 0 ] || fail "malformed Orca worktree identity should refuse"
+  assert_contains "$(cat "$dir/orca-malformed.err")" "Orca endpoint metadata for task $id is malformed or inconsistent" \
+    "malformed Orca worktree identity refusal did not match the endpoint guard"
 
   id=cmux-task
   fm_write_meta "$dir/home/state/$id.meta" \
