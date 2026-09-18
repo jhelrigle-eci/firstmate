@@ -79,6 +79,35 @@ case "$ARM_ATTEMPTS" in 1|2|3) : ;; *) ARM_ATTEMPTS=2 ;; esac
 case "$POLL" in ''|*[!0-9]*|0) POLL=2 ;; esac
 case "$LOCK_ATTEMPTS" in ''|*[!0-9]*|0) LOCK_ATTEMPTS=50 ;; esac
 
+calm_preference_on() {
+  local stored
+  [ -f "$CONFIG/calm" ] || return 1
+  stored=$(tr -d '[:space:]' < "$CONFIG/calm" 2>/dev/null || true)
+  case "$stored" in
+    on|max) return 0 ;;
+  esac
+  return 1
+}
+
+watcher_followup_body() {  # <wake-lines>
+  local wake_lines=$1
+  if calm_preference_on; then
+    cat <<EOF
+firstmate watcher wake.
+$wake_lines
+
+Run bin/fm-wake-drain.sh, handle the wake, then run the WAKE_ACK_REQUIRED --ack-through command. Do not run bin/fm-watch-arm.sh after an ordinary wake.
+EOF
+    return
+  fi
+  cat <<EOF
+firstmate watcher wake - one supervision event needs a handling turn now.
+$wake_lines
+
+Run bin/fm-wake-drain.sh first, handle the wake, then run its exact WAKE_ACK_REQUIRED --ack-through command. Until that post-handling acknowledgement, interruption leaves the wake durable for idempotent re-handling. This stop hook owns watcher continuity: when the handling turn ends, the next needed cycle parks automatically - do NOT run bin/fm-watch-arm.sh after an ordinary wake.
+EOF
+}
+
 # shellcheck source=bin/fm-primary-scope-lib.sh
 . "$SCRIPT_DIR/fm-primary-scope-lib.sh"
 # shellcheck source=bin/fm-supervision-lib.sh
@@ -358,10 +387,8 @@ fi
 
 if [ "$ACTIONABLE" -eq 1 ]; then
   WAKE=$(grep -E '^(signal:|stale:|check:|heartbeat)' "$ARM_OUT" 2>/dev/null | head -8)
-  emit_followup watcher "firstmate watcher wake - one supervision event needs a handling turn now.
-$WAKE
-
-Run bin/fm-wake-drain.sh first, handle the wake, then run its exact WAKE_ACK_REQUIRED --ack-through command. Until that post-handling acknowledgement, interruption leaves the wake durable for idempotent re-handling. This stop hook owns watcher continuity: when the handling turn ends, the next needed cycle parks automatically - do NOT run bin/fm-watch-arm.sh after an ordinary wake." reset-budget
+  FOLLOWUP=$(watcher_followup_body "$WAKE")
+  emit_followup watcher "$FOLLOWUP" reset-budget
 fi
 
 # A verified live cycle with a fresh beacon is positive recovery even though this
