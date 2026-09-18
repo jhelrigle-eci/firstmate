@@ -291,6 +291,23 @@ test_park_delivers_actionable_wake_as_followup() {
   pass "cursor park: an actionable close is delivered as one watcher-kind follow-up"
 }
 
+test_park_uses_compact_wake_copy_when_calm_is_on() {
+  local dir out body
+  dir=$(make_primary_dir "$TMP_ROOT/park-calm-compact")
+  : > "$dir/state/task1.meta"
+  mkdir -p "$dir/config"
+  printf '%s\n' on > "$dir/config/calm"
+  write_arm_fixture "$dir" actionable
+  out=$(run_park "$dir")
+  [ "$(kind_of_followup "$out")" = watcher ] \
+    || fail "Calm-on wake should still arrive as watcher-kind follow-up, got: $out"
+  body=$(followup_of "$out")
+  case "$body" in *'firstmate watcher wake.'*) ;; *) fail "Calm-on wake banner should be compact: $body" ;; esac
+  case "$body" in *'Until that post-handling acknowledgement'*) fail "Calm-on wake copy must omit the long continuity paragraph: $body" ;; esac
+  case "$body" in *'WAKE_ACK_REQUIRED --ack-through'*) ;; *) fail "Calm-on wake copy must still require queue acknowledgement: $body" ;; esac
+  pass "cursor park: Calm-on mode uses compact wake follow-up text"
+}
+
 test_park_never_exits_two() {
   local dir status
   dir=$(make_primary_dir "$TMP_ROOT/park-exit")
@@ -686,6 +703,7 @@ test_pretool_guards_deduplicate_and_render_cursor_deny
 test_cd_guard_renders_cursor_deny
 test_park_silent_when_nothing_in_flight
 test_park_delivers_actionable_wake_as_followup
+test_park_uses_compact_wake_copy_when_calm_is_on
 test_park_never_exits_two
 test_park_repair_nag_is_bounded
 test_park_repair_nag_requires_a_persisted_budget
