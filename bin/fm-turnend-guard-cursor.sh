@@ -103,7 +103,12 @@ calm_suppresses_watcher_followup() {  # <wake-lines>
         ;;
     esac
   done <<< "$wake_lines"
-  [ "$saw_rearm" -eq 1 ]
+  [ "$saw_rearm" -eq 1 ] || return 1
+  # The re-ring carries no queue row of its own, so it is the only delivery of
+  # whatever is already queued. Suppress it only with an empty queue, where it
+  # really is post-restart chatter: fm_supervision_status owns that test.
+  fm_supervision_status "$STATE" "$GRACE"
+  [ "$FM_SUP_QUEUE_PENDING" = false ]
 }
 
 watcher_followup_body() {  # <wake-lines>
@@ -232,17 +237,28 @@ budget_reset_if_ours() {
 }
 
 emit_repair_followup() {  # <reason> <arm-tail> <attempt>
-  local reason=$1 arm_tail=$2 attempt_count=$3 prior count body encoded response
+  local reason=$1 arm_tail=$2 attempt_count=$3 prior count body queued encoded response
   park_still_ours || exit 0
   budget_read
   [ "$BUDGET_COUNT" -lt "$BLOCK_BUDGET" ] || exit 0
   prior=$BUDGET_COUNT
   count=$((prior + 1))
 
+  # A worker handoff queued before the cycle broke is still deliverable, and
+  # this nag is the only thing reaching the session while no cycle can be
+  # established, so it must not report the outage alone.
+  queued=
+  fm_supervision_status "$STATE" "$GRACE"
+  if [ "$FM_SUP_QUEUE_PENDING" = true ]; then
+    queued='
+
+Wake records are already queued and unhandled, and draining them needs no live watcher: run bin/fm-wake-drain.sh, handle them, and run its exact WAKE_ACK_REQUIRED --ack-through command.'
+  fi
+
   body="TURN WOULD END BLIND - supervision is off. The hook-owned watcher park could not establish a live cycle after $attempt_count bounded attempts (nag $count of $BLOCK_BUDGET).
 $arm_tail
 
-$reason"
+$reason$queued"
   fm_operational_input_encode turn-end-guard "$body" encoded || exit 0
   response=$(jq -n --arg m "$encoded" '{followup_message:$m}' 2>/dev/null) || exit 0
 
@@ -404,8 +420,9 @@ fi
 
 if [ "$ACTIONABLE" -eq 1 ]; then
   WAKE=$(grep -E '^(signal:|stale:|check:|heartbeat)' "$ARM_OUT" 2>/dev/null | head -8)
-  # Calm mode deliberately hides the synthetic recovery re-ring to reduce
-  # routine noise while preserving every other actionable wake class.
+  # Calm mode deliberately hides the synthetic recovery re-ring when there is
+  # nothing queued behind it, while preserving every other actionable wake
+  # class and every re-ring that is announcing durable queued work.
   if calm_suppresses_watcher_followup "$WAKE"; then
     budget_reset_if_ours
     exit 0

@@ -343,6 +343,70 @@ test_park_suppresses_rearm_resurface_followup_when_calm_is_on() {
   pass "cursor park: Calm-on suppresses rearm-resurface follow-up noise"
 }
 
+# Stand in for the signal row a worker's `done:` status append produces, written
+# through the durable queue's own writer rather than a hand-built row.
+queue_worker_done_wake() {  # <dir> <task-id>
+  local dir=$1 id=$2
+  FM_HOME="$dir" bash -c '
+    . "$1/bin/fm-wake-lib.sh"
+    fm_wake_append signal "$2.status" "signal: $2 done: fix implemented"
+  ' _ "$dir" "$id" || fail "could not queue a worker handoff through fm_wake_append"
+  [ -s "$dir/state/.wake-queue" ] || fail "the queued worker handoff did not persist"
+}
+
+# The regression: supervision went down carrying a worker handoff, and the
+# re-ring the recovered cycle emits is that handoff's only delivery, because it
+# carries no queue row of its own. Calm suppressing it stranded the worker's
+# completion until the captain typed.
+test_park_delivers_rearm_resurface_followup_when_calm_is_on_and_wakes_queued() {
+  local dir out body
+  dir=$(make_primary_dir "$TMP_ROOT/park-rearm-calm-on-queued")
+  : > "$dir/state/task1.meta"
+  mkdir -p "$dir/config"
+  printf '%s\n' on > "$dir/config/calm"
+  queue_worker_done_wake "$dir" task1
+  write_arm_fixture "$dir" rearm_resurface
+  out=$(run_park "$dir")
+  [ -e "$dir/state/arm-ran" ] || fail "the park did not run the arm"
+  [ "$(printf '%s' "$out" | jq -s 'map(select(has("followup_message"))) | length' 2>/dev/null)" = 1 ] \
+    || fail "a queued worker handoff must produce exactly one follow-up, got: $out"
+  [ "$(kind_of_followup "$out")" = watcher ] \
+    || fail "Calm-on must still deliver a re-ring announcing queued work, got: $out"
+  body=$(followup_of "$out")
+  case "$body" in *'check: rearm-resurface'*) ;; *) fail "the delivered re-ring lost its wake reason: $body" ;; esac
+  case "$body" in *'fm-wake-drain.sh'*) ;; *) fail "the follow-up must tell the session to drain the queued handoff: $body" ;; esac
+  [ -s "$dir/state/.wake-queue" ] \
+    || fail "the park consumed the durable worker handoff instead of leaving it for the drain"
+  pass "cursor park: Calm-on delivers a rearm-resurface re-ring that announces queued work"
+}
+
+test_park_repair_nag_names_a_queued_worker_handoff() {
+  local dir out body
+  dir=$(make_primary_dir "$TMP_ROOT/park-nag-queued")
+  : > "$dir/state/task1.meta"
+  queue_worker_done_wake "$dir" task1
+  write_arm_fixture "$dir" failed
+  out=$(run_park "$dir")
+  [ "$(kind_of_followup "$out")" = turn-end-guard ] \
+    || fail "a park that cannot establish a cycle must still report, got: $out"
+  body=$(followup_of "$out")
+  case "$body" in *'TURN WOULD END BLIND'*) ;; *) fail "the repair nag lost its outage banner: $body" ;; esac
+  case "$body" in *'fm-wake-drain.sh'*) ;; *) fail "the repair nag must name the queued worker handoff and its drain: $body" ;; esac
+  pass "cursor park: a repair nag names durable queued work instead of reporting the outage alone"
+}
+
+test_park_repair_nag_stays_outage_only_without_queued_wakes() {
+  local dir out body
+  dir=$(make_primary_dir "$TMP_ROOT/park-nag-unqueued")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" failed
+  out=$(run_park "$dir")
+  body=$(followup_of "$out")
+  case "$body" in *'TURN WOULD END BLIND'*) ;; *) fail "expected the outage banner, got: $out" ;; esac
+  case "$body" in *'fm-wake-drain.sh'*) fail "with an empty queue the nag must not invent a drain instruction: $body" ;; esac
+  pass "cursor park: a repair nag with an empty queue reports only the outage"
+}
+
 test_park_never_exits_two() {
   local dir status
   dir=$(make_primary_dir "$TMP_ROOT/park-exit")
@@ -741,6 +805,9 @@ test_park_delivers_actionable_wake_as_followup
 test_park_uses_compact_wake_copy_when_calm_is_on
 test_park_keeps_rearm_resurface_followup_when_calm_is_off
 test_park_suppresses_rearm_resurface_followup_when_calm_is_on
+test_park_delivers_rearm_resurface_followup_when_calm_is_on_and_wakes_queued
+test_park_repair_nag_names_a_queued_worker_handoff
+test_park_repair_nag_stays_outage_only_without_queued_wakes
 test_park_never_exits_two
 test_park_repair_nag_is_bounded
 test_park_repair_nag_requires_a_persisted_budget
