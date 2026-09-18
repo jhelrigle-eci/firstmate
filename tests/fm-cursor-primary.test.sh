@@ -107,6 +107,15 @@ printf 'stale: fixture-win needs a look\n'
 exit 0
 SH
       ;;
+    rearm_resurface)
+      cat > "$dir/bin/fm-watch-arm.sh" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$$" >> "$FM_HOME/state/arm-ran"
+printf 'watcher: started pid=%s (beacon fresh)\n' "$$"
+printf 'check: rearm-resurface\n'
+exit 0
+SH
+      ;;
     failed)
       cat > "$dir/bin/fm-watch-arm.sh" <<'SH'
 #!/usr/bin/env bash
@@ -306,6 +315,32 @@ test_park_uses_compact_wake_copy_when_calm_is_on() {
   case "$body" in *'Until that post-handling acknowledgement'*) fail "Calm-on wake copy must omit the long continuity paragraph: $body" ;; esac
   case "$body" in *'WAKE_ACK_REQUIRED --ack-through'*) ;; *) fail "Calm-on wake copy must still require queue acknowledgement: $body" ;; esac
   pass "cursor park: Calm-on mode uses compact wake follow-up text"
+}
+
+test_park_keeps_rearm_resurface_followup_when_calm_is_off() {
+  local dir out body
+  dir=$(make_primary_dir "$TMP_ROOT/park-rearm-default")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" rearm_resurface
+  out=$(run_park "$dir")
+  [ "$(kind_of_followup "$out")" = watcher ] \
+    || fail "Calm-off should surface the rearm-resurface follow-up, got: $out"
+  body=$(followup_of "$out")
+  case "$body" in *'check: rearm-resurface'*) ;; *) fail "Calm-off rearm follow-up lost its wake reason: $body" ;; esac
+  pass "cursor park: Calm-off keeps rearm-resurface follow-ups"
+}
+
+test_park_suppresses_rearm_resurface_followup_when_calm_is_on() {
+  local dir out
+  dir=$(make_primary_dir "$TMP_ROOT/park-rearm-calm-on")
+  : > "$dir/state/task1.meta"
+  mkdir -p "$dir/config"
+  printf '%s\n' on > "$dir/config/calm"
+  write_arm_fixture "$dir" rearm_resurface
+  out=$(run_park "$dir")
+  [ -e "$dir/state/arm-ran" ] || fail "the park did not run the arm"
+  [ -z "$out" ] || fail "Calm-on should suppress non-actionable rearm-resurface follow-ups, got: $out"
+  pass "cursor park: Calm-on suppresses rearm-resurface follow-up noise"
 }
 
 test_park_never_exits_two() {
@@ -704,6 +739,8 @@ test_cd_guard_renders_cursor_deny
 test_park_silent_when_nothing_in_flight
 test_park_delivers_actionable_wake_as_followup
 test_park_uses_compact_wake_copy_when_calm_is_on
+test_park_keeps_rearm_resurface_followup_when_calm_is_off
+test_park_suppresses_rearm_resurface_followup_when_calm_is_on
 test_park_never_exits_two
 test_park_repair_nag_is_bounded
 test_park_repair_nag_requires_a_persisted_budget

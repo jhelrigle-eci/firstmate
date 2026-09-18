@@ -89,6 +89,23 @@ calm_preference_on() {
   return 1
 }
 
+calm_suppresses_watcher_followup() {  # <wake-lines>
+  local wake_lines=$1 line saw_rearm=0
+  calm_preference_on || return 1
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    case "$line" in
+      'check: rearm-resurface')
+        saw_rearm=1
+        ;;
+      *)
+        return 1
+        ;;
+    esac
+  done <<< "$wake_lines"
+  [ "$saw_rearm" -eq 1 ]
+}
+
 watcher_followup_body() {  # <wake-lines>
   local wake_lines=$1
   if calm_preference_on; then
@@ -387,6 +404,12 @@ fi
 
 if [ "$ACTIONABLE" -eq 1 ]; then
   WAKE=$(grep -E '^(signal:|stale:|check:|heartbeat)' "$ARM_OUT" 2>/dev/null | head -8)
+  # Calm mode deliberately hides the synthetic recovery re-ring to reduce
+  # routine noise while preserving every other actionable wake class.
+  if calm_suppresses_watcher_followup "$WAKE"; then
+    budget_reset_if_ours
+    exit 0
+  fi
   FOLLOWUP=$(watcher_followup_body "$WAKE")
   emit_followup watcher "$FOLLOWUP" reset-budget
 fi
