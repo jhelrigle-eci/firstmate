@@ -307,9 +307,9 @@ test_away_reentry_refuses_pending_return_gate() {
 }
 
 test_return_is_mode_agnostic_for_quiet_mode() {
-  # kunchenguid/firstmate#2356's /quiet off calls this exact script, unchanged
-  # - it must behave identically whether state/.afk declares "away" or
-  # "quiet", since return_guard/return_reconcile only ever test presence.
+  # kunchenguid/firstmate#2356's /quiet off calls this exact script, unchanged.
+  # Begin/check teardown and reconciliation must stay mode-agnostic even when
+  # guard-mode read-only checks treat quiet as ordinary work.
   local dir out
   dir="$TMP_ROOT/quiet-mode-return"
   install_runner "$dir"
@@ -321,6 +321,20 @@ test_return_is_mode_agnostic_for_quiet_mode() {
   [ ! -e "$dir/home/state/.afk" ] || fail "quiet-mode return left the mode flag behind"
   [ "$(wc -l < "$dir/home/stop.log" | tr -d ' ')" -eq 1 ] || fail "quiet-mode return did not stop the daemon exactly once"
   pass "/quiet off's return path behaves identically for a quiet-content flag as for a legacy away-content one"
+}
+
+test_return_guard_allows_quiet_mode_ordinary_work() {
+  local dir out
+  dir="$TMP_ROOT/guard-quiet"
+  install_runner "$dir"
+  printf 'quiet\n%s\n' "$(date +%s)" > "$dir/home/state/.afk"
+  FM_HOME="$dir/home" FM_STATE_OVERRIDE="$dir/home/state" "$dir/bin/fm-afk-return.sh" guard \
+    || fail "guard refused while quiet mode was active"
+  out=$(FM_HOME="$dir/home" FM_STATE_OVERRIDE="$dir/home/state" "$ROOT/bin/fm-bearings-snapshot.sh" --json 2>&1) \
+    || fail "bearings should run while quiet mode is active: $out"
+  printf '%s' "$out" | jq -e '[.gates[].id] | index("(return-catchup)") | not' >/dev/null \
+    || fail "quiet mode incorrectly surfaced return catch-up gating: $out"
+  pass "guard and bearings allow ordinary work while quiet mode is active"
 }
 
 test_check_retries_recorded_terminal_teardown() {
@@ -790,6 +804,7 @@ test_captain_decision_does_not_masquerade_as_firstmate_blocker
 test_evidence_publication_failure_preserves_wake_for_redrain
 test_away_reentry_refuses_pending_return_gate
 test_return_is_mode_agnostic_for_quiet_mode
+test_return_guard_allows_quiet_mode_ordinary_work
 test_check_retries_recorded_terminal_teardown
 test_unreadable_superseded_archive_keeps_return_gated
 test_missing_final_archive_keeps_retained_contract_gated

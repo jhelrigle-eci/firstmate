@@ -280,9 +280,28 @@ catchup_summary() {
   printf '%s\t%s\n' "$count" "$reason"
 }
 
+# Read-only mode detection for `guard`: mirrors fm_afk_mode's contract without
+# sourcing fm-wake-lib.sh, which mutates state directory setup.
+guard_afk_mode() {
+  local mode
+  mode=$(head -n 1 "$STATE/.afk" 2>/dev/null || true)
+  case "$mode" in
+    quiet) printf '%s\n' quiet ;;
+    *) printf '%s\n' away ;;
+  esac
+}
+
+guard_away_mode_active() {
+  if fm_afk_contract_present "$STATE"; then
+    return 0
+  fi
+  [ -e "$STATE/.afk" ] || return 1
+  [ "$(guard_afk_mode)" = away ]
+}
+
 return_guard() {
   local reasons
-  if [ -e "$STATE/.afk" ] || fm_afk_contract_present "$STATE"; then
+  if guard_away_mode_active; then
     printf 'fm-afk-return: away mode is still active; run bin/fm-afk-return.sh before ordinary captain work\n' >&2
     return 3
   fi
