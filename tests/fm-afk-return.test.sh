@@ -695,6 +695,48 @@ test_return_guard_refuses_while_the_record_exists() {
   pass "the read-only guard treats the away-posture record as active away mode without the legacy flag"
 }
 
+test_guard_away_with_empty_flag_refuses() {
+  local dir out rc
+  dir="$TMP_ROOT/guard-empty-flag"
+  install_runner "$dir"
+  printf '\n%s\n' "$(date +%s)" > "$dir/home/state/.afk"
+  set +e
+  out=$(FM_HOME="$dir/home" FM_STATE_OVERRIDE="$dir/home/state" "$dir/bin/fm-afk-return.sh" guard 2>&1)
+  rc=$?
+  set -e
+  [ "$rc" -eq 3 ] || fail "guard should refuse with an empty first line in .afk (rc=$rc): $out"
+  assert_contains "$out" 'away mode is still active' "guard did not treat an empty mode as away"
+  pass "an empty .afk mode still refuses ordinary work"
+}
+
+test_guard_away_with_legacy_flag_refuses() {
+  local dir out rc
+  dir="$TMP_ROOT/guard-legacy-flag"
+  install_runner "$dir"
+  printf '%s\n' "$(date +%s)" > "$dir/home/state/.afk"
+  set +e
+  out=$(FM_HOME="$dir/home" FM_STATE_OVERRIDE="$dir/home/state" "$dir/bin/fm-afk-return.sh" guard 2>&1)
+  rc=$?
+  set -e
+  [ "$rc" -eq 3 ] || fail "guard should refuse with a legacy epoch mode in .afk (rc=$rc): $out"
+  assert_contains "$out" 'away mode is still active' "guard did not treat a legacy .afk line as away"
+  pass "a legacy epoch .afk line still refuses ordinary work"
+}
+
+test_guard_away_with_unrecognized_flag_refuses() {
+  local dir out rc
+  dir="$TMP_ROOT/guard-unrecognized-flag"
+  install_runner "$dir"
+  printf 'loud\n%s\n' "$(date +%s)" > "$dir/home/state/.afk"
+  set +e
+  out=$(FM_HOME="$dir/home" FM_STATE_OVERRIDE="$dir/home/state" "$dir/bin/fm-afk-return.sh" guard 2>&1)
+  rc=$?
+  set -e
+  [ "$rc" -eq 3 ] || fail "guard should refuse with an unrecognized first line in .afk (rc=$rc): $out"
+  assert_contains "$out" 'away mode is still active' "guard did not treat an unrecognized mode as away"
+  pass "an unrecognized .afk mode still refuses ordinary work"
+}
+
 test_return_brief_health_leads_with_a_gap() {
   local dir out gap_line clean_line
   dir="$TMP_ROOT/brief-gap"
@@ -843,6 +885,9 @@ test_unreadable_outcome_store_keeps_catchup_gated
 test_failed_held_listing_keeps_catchup_gated
 test_unreadable_status_file_keeps_catchup_gated
 test_return_guard_refuses_while_the_record_exists
+test_guard_away_with_empty_flag_refuses
+test_guard_away_with_legacy_flag_refuses
+test_guard_away_with_unrecognized_flag_refuses
 test_return_brief_health_leads_with_a_gap
 test_return_brief_does_not_report_an_acked_watcher_down_marker_as_a_gap
 test_return_brief_without_a_record_reports_the_legacy_flag

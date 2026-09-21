@@ -583,6 +583,18 @@ test_declared_mode_round_trips_and_defaults_away() {
   contract "$home" propose --words 'refreshed mandate' >/dev/null 2>&1 || fail "mandate refresh proposal failed"
   contract "$home" confirm >/dev/null 2>&1 || fail "mandate refresh confirm failed"
   [ "$(contract "$home" field mode)" = quiet ] || fail "a mandate refresh with no declared mode lost the standing quiet mode"
+  set +e
+  out=$(contract "$home" propose --mode quiet --action merge --object x 2>&1)
+  rc=$?
+  set -e
+  [ "$rc" -eq 3 ] || fail "a refused quiet proposal should keep rc=3 (rc=$rc): $out"
+  [ "$(contract "$home" field mode --proposal)" = quiet ] || fail "the refused proposal dropped quiet mode"
+  contract "$home" propose --action merge --object x --when 'checks green' >/dev/null 2>&1 \
+    || fail "restated proposal failed"
+  [ "$(contract "$home" field mode --proposal)" = quiet ] \
+    || fail "a restated proposal without --mode lost pending quiet mode"
+  contract "$home" confirm >/dev/null 2>&1 || fail "restated quiet confirm failed"
+  [ "$(contract "$home" field mode)" = quiet ] || fail "restated confirm lost quiet mode"
 
   home=$(make_home mode-default)
   contract "$home" propose >/dev/null || fail "default mode proposal failed"

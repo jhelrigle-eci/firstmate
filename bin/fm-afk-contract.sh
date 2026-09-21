@@ -848,7 +848,10 @@ fm_afk_contract_cmd_propose() {
   local entered entered_epoch proposal rc=0 refused
   fm_afk_contract_parse_inputs "$@" || return 2
   if [ -z "$MODE" ]; then
-    MODE=$(fm_afk_contract_read_field "$(fm_afk_contract_path)" mode 2>/dev/null || true)
+    MODE=$(fm_afk_contract_read_field "$(fm_afk_contract_proposal_path)" mode 2>/dev/null || true)
+    if [ -z "$MODE" ]; then
+      MODE=$(fm_afk_contract_read_field "$(fm_afk_contract_path)" mode 2>/dev/null || true)
+    fi
     case "$MODE" in quiet) ;; *) MODE=away ;; esac
   fi
   entered=$(fm_afk_contract_now_iso)
