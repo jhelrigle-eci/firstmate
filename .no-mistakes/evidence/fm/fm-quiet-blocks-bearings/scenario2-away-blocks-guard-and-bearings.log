@@ -1,0 +1,23 @@
+scenario: away mode blocks guard and bearings
+fm_home: /Users/jhelrigle/.no-mistakes/worktrees/1f0ca6dcf975/01M32NNSJ6B4NHZTX4E8NVN6VJ/.tmp.fmhome.away.nLl1kV
+Away posture read-back (proposed, not yet confirmed):
+  entered: 2026-09-21T20:13:11Z
+  expected return: not given
+  spend cap: 4 concurrent workers
+  merge when green (task ids): (none)
+  reach: hold-for-return only. No phone channel is configured; anything that needs you waits for your return.
+  your words (verbatim):
+    away check
+  accepted clauses:
+    (none)
+  refused clauses:
+    (none)
+  everything else waits for your return: no red merge without its named check, no discard without a named object and condition, never credentials, legal, financial, or attended prompts, nothing by analogy, and every clause expires at return.
+  hard rule: forbidden, destructive, irreversible, and security-sensitive actions are never pre-authorizable regardless of clause text; no recorded clause is authority by itself.
+  recorded clauses are held for the return brief and are not executed by this release.
+Say go to confirm; restate any refused clause first if you want it recorded.
+Away posture confirmed at 2026-09-21T20:13:12Z: hold-for-return only. No phone channel is configured; anything that needs you waits for your return. No mandate clauses recorded. Forbidden, destructive, irreversible, and security-sensitive actions are never pre-authorizable regardless of clause text, and no recorded clause is authority by itself. Expected return: not given. Spend cap: 4 concurrent workers.
+guard_exit=3
+guard_out=fm-afk-return: away mode is still active; run bin/fm-afk-return.sh before ordinary captain work
+bearings_exit=3
+bearings_out=fm-afk-return: away mode is still active; run bin/fm-afk-return.sh before ordinary captain work

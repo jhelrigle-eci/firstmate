@@ -1,0 +1,4 @@
+scenario=scenario4_malformed_flag_token_blocks_guard
+tmp=./tmp-live-afk.A7xRf9
+fm-afk-return: away mode is still active; run bin/fm-afk-return.sh before ordinary captain work
+exit_code=3
