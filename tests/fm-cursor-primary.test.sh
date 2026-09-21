@@ -391,7 +391,7 @@ test_park_repair_nag_names_a_queued_worker_handoff() {
     || fail "a park that cannot establish a cycle must still report, got: $out"
   body=$(followup_of "$out")
   case "$body" in *'TURN WOULD END BLIND'*) ;; *) fail "the repair nag lost its outage banner: $body" ;; esac
-  case "$body" in *'fm-wake-drain.sh'*) ;; *) fail "the repair nag must name the queued worker handoff and its drain: $body" ;; esac
+  case "$body" in *'After draining queued wakes, watcher supervision is owned by the stop-hook park;'*) ;; *) fail "the repair nag must use the shared queued-wake repair line: $body" ;; esac
   pass "cursor park: a repair nag names durable queued work instead of reporting the outage alone"
 }
 

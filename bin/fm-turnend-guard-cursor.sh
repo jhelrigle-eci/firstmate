@@ -237,7 +237,7 @@ budget_reset_if_ours() {
 }
 
 emit_repair_followup() {  # <reason> <arm-tail> <attempt>
-  local reason=$1 arm_tail=$2 attempt_count=$3 prior count body queued encoded response
+  local reason=$1 arm_tail=$2 attempt_count=$3 prior count body queued queued_reason encoded response
   park_still_ours || exit 0
   budget_read
   [ "$BUDGET_COUNT" -lt "$BLOCK_BUDGET" ] || exit 0
@@ -250,9 +250,12 @@ emit_repair_followup() {  # <reason> <arm-tail> <attempt>
   queued=
   fm_supervision_status "$STATE" "$GRACE"
   if [ "$FM_SUP_QUEUE_PENDING" = true ]; then
-    queued='
+    queued_reason=$("$SCRIPT_DIR/fm-supervision-instructions.sh" --repair-line --queue-pending 1 2>/dev/null || true)
+    if [ -n "$queued_reason" ]; then
+      queued="
 
-Wake records are already queued and unhandled, and draining them needs no live watcher: run bin/fm-wake-drain.sh, handle them, and run its exact WAKE_ACK_REQUIRED --ack-through command.'
+$queued_reason"
+    fi
   fi
 
   body="TURN WOULD END BLIND - supervision is off. The hook-owned watcher park could not establish a live cycle after $attempt_count bounded attempts (nag $count of $BLOCK_BUDGET).
