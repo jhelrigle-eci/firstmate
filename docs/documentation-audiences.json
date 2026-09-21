@@ -301,6 +301,10 @@
       "audience": "maintainer-verification"
     },
     {
+      "path": "docs/calm-cursor-herdr-mode-spec.md",
+      "audience": "maintainer-architecture"
+    },
+    {
       "path": "docs/calm.md",
       "audience": "operator-current"
     },
