@@ -348,6 +348,42 @@ unit_mode_refresh_preserves_quiet() {
   rm -rf "$st"
 }
 
+unit_mode_recorded_on_the_posture_record() {
+  local st out
+  st=$(mktemp -d "${TMPDIR:-/tmp}/fm-afk-mode-record.XXXXXX")
+  mkdir -p "$st/state"
+  FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" FM_AFK_MODE=quiet "$LAUNCH" propose \
+    --words 'quiet while I watch' >/dev/null 2>&1
+  FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" "$LAUNCH" confirm >/dev/null 2>&1
+  out=$(FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" "$CONTRACT" field mode)
+  if [ "$out" = quiet ]; then
+    pass "mode: FM_AFK_MODE=quiet records quiet on the posture record, the only quiet signal on Pi"
+  else
+    fail "mode: a quiet entry recorded '$out' on the posture record instead of quiet"
+  fi
+  FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" "$LAUNCH" propose \
+    --words 'still quiet, new mandate' >/dev/null 2>&1
+  FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" "$LAUNCH" confirm >/dev/null 2>&1
+  out=$(FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" "$CONTRACT" field mode)
+  if [ "$out" = quiet ]; then
+    pass "mode: a mandate refresh with FM_AFK_MODE unset preserves the record's quiet mode"
+  else
+    fail "mode: a mandate refresh changed the record's quiet mode to '$out'"
+  fi
+  rm -rf "$st"
+  st=$(mktemp -d "${TMPDIR:-/tmp}/fm-afk-mode-record-away.XXXXXX")
+  mkdir -p "$st/state"
+  FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" "$LAUNCH" propose --words 'back tonight' >/dev/null 2>&1
+  FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" "$LAUNCH" confirm >/dev/null 2>&1
+  out=$(FM_HOME="$st" FM_STATE_OVERRIDE="$st/state" "$CONTRACT" field mode)
+  if [ "$out" = away ]; then
+    pass "mode: a fresh entry with FM_AFK_MODE unset records away on the posture record"
+  else
+    fail "mode: a fresh unset-mode entry recorded '$out' on the posture record instead of away"
+  fi
+  rm -rf "$st"
+}
+
 unit_mode_garbage_and_legacy_content_reads_away() {
   local st out
   st=$(mktemp -d "${TMPDIR:-/tmp}/fm-afk-mode-garbage.XXXXXX")
@@ -1196,6 +1232,7 @@ unit_fresh_vs_refresh
 unit_mode_explicit_write
 unit_mode_fresh_defaults_away
 unit_mode_refresh_preserves_quiet
+unit_mode_recorded_on_the_posture_record
 unit_mode_garbage_and_legacy_content_reads_away
 unit_stop_ordering
 unit_stop_rejects_reused_pid

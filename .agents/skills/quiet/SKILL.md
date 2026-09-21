@@ -2,7 +2,7 @@
 name: quiet
 description: >-
   Enter quiet supervision mode when the captain invokes /quiet or asks for quiet mode, quiet-while-present, or fewer routine wake turns while they stay in the session.
-  It sets the same durable away/quiet-mode flag as /afk, in `quiet` mode, so the sub-supervisor daemon self-handles routine wakes and escalates captain-relevant events exactly as away mode does, but ordinary captain chat does NOT exit it - only an explicit `/quiet off` does.
+  It sets the same durable away-posture mode as /afk, in `quiet` mode, recording it on `state/.afk-contract` and mirroring it into `state/.afk` where that flag exists, so the sub-supervisor daemon self-handles routine wakes and escalates captain-relevant events exactly as away mode does, but ordinary captain chat does NOT exit it - only an explicit `/quiet off` does.
 user-invocable: true
 metadata:
   internal: true
@@ -18,7 +18,7 @@ This skill is a thin wrapper.
 Every mechanism below - the daemon, its injection, its busy/composer guards,
 its classification policy, its reliability properties - is owned once by the
 `afk` skill and is IDENTICAL in quiet mode; nothing here restates it.
-The only things quiet mode changes are which mode the flag declares and what
+The only things quiet mode changes are which mode the posture declares and what
 exits it.
 
 ## What it does
@@ -28,14 +28,18 @@ exits it.
    Follow the `afk` skill's "What it does" steps 1-3 verbatim (terminal-
    backed vs harness-native entry, daemon-already-running refresh, never
    arming a separate `fm-watch.sh`) with one addition: export
-   `FM_AFK_MODE=quiet` in the shell that invokes `bin/fm-afk-launch.sh start`
-   (or `start-native`), so `state/.afk`'s first line reads `quiet` instead of
-   `away`.
+   `FM_AFK_MODE=quiet` in the shell that invokes every `bin/fm-afk-launch.sh`
+   entry command for this posture.
+   At `propose` it records `mode: quiet` on the away-posture record, which is
+   the whole entry - and so the only quiet signal - on Pi and pi-signed; at
+   `start` (or `start-native`) it makes `state/.afk`'s first line read `quiet`
+   instead of `away`.
    Leaving `FM_AFK_MODE` unset on a bare refresh of an already-running quiet
-   daemon is also correct and does nothing wrong: `fm_afk_flag_write`
-   preserves the on-disk mode when no explicit mode is given, so a plain
-   `/afk`-shaped refresh call never resets quiet back to away underneath the
-   captain.
+   daemon, or on a mandate refresh of a standing quiet record, is also correct
+   and does nothing wrong: `fm_afk_flag_write` and `bin/fm-afk-contract.sh
+   propose` both preserve the mode already on disk when no explicit mode is
+   given, so a plain `/afk`-shaped refresh call never resets quiet back to
+   away underneath the captain.
 
 2. **Acknowledge** in `AGENTS.md` section 9 language: "Captain, quiet mode is
    active; I will batch routine updates and surface only decisions, failures,
@@ -53,8 +57,8 @@ point of this mode (AGENTS.md section 8's away-mode stub, quiet branch).
   documents for its own return path (correct-ordered daemon shutdown,
   durable wake presentation and acknowledgement, escalation/wedge evidence,
   and the return-catch-up gate).
-  That script does not read or care about the flag's mode, so it needs no
-  quiet-specific variant.
+  Its `begin` and `check` paths do not read or care about the flag's mode, so
+  those paths need no quiet-specific variant.
 - A marked daemon escalation, or a message beginning `/quiet` while already
   in quiet mode (refresh, not exit) -> stay in quiet mode and process it, the
   same two carve-outs `/afk` documents for away mode.

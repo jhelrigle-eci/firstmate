@@ -7,6 +7,11 @@
 # state/.afk-contract and never inferred from chat. While the record exists the
 # home is afk; the captain's first unmarked message archives it (the return path
 # in bin/fm-afk-return.sh calls `archive` through bin/fm-afk-launch.sh stop).
+# The record also declares WHICH posture it is, `away` or `quiet`
+# (kunchenguid/firstmate#2356): quiet keeps the captain present, so ordinary
+# captain work proceeds under the record and no away-return is demanded. On Pi
+# and pi-signed the record is the only place that mode exists, because no
+# state/.afk flag is ever written there.
 # Being away changes how the captain is informed and what happens at a
 # captain-owned decision point, never the authority set. Hold-for-return is the
 # only reach profile this release records: there is no phone channel, and the
@@ -17,6 +22,8 @@
 #   version: 1
 #   entered: <UTC ISO 8601>
 #   entered_epoch: <seconds>
+#   mode: away | quiet     the declared posture (a missing field on a pre-field
+#                          v1 record reads as away)
 #   expected_return: <UTC ISO 8601> | -
 #   reach_channels: none
 #   reach_announced: <the one-sentence reach announcement>
@@ -86,6 +93,7 @@
 #   fm-afk-contract.sh propose [--words-file <path> | --words <text>]
 #       [--action <verb> --object <text> --when <text> [--stop <text>]]...
 #       [--expected-return <UTC ISO 8601>] [--spend <n>] [--grant <task-id>]...
+#       [--mode away|quiet]
 #     Compile and write the proposal, then print the read-back. Exit 0 with every
 #     clause accepted, 3 when at least one clause was refused (the read-back names
 #     the missing part), and 2 on a usage error. --words-file keeps the file's
@@ -93,6 +101,8 @@
 #     proposal so the captain can restate it before saying go. Repeatable --grant
 #     records captain-named task ids that may merge-when-green while the record
 #     exists; invalid or duplicate ids are a usage error, never a refused clause.
+#     --mode declares the posture this entry requests; omitted preserves the
+#     standing record's mode and falls back to away when no record exists.
 #   fm-afk-contract.sh confirm
 #     Promote the proposal into the record with the confirmed timestamp and
 #     print the entry announcement. A proposal is required when no confirmed
@@ -352,7 +362,7 @@ fm_afk_contract_validate_iso() {  # <ts>
 # Compile every input into a record body on stdout (everything except the
 # confirmed fields). Inputs: WORDS (verbatim), the parallel clause field arrays
 # CLAUSE_ACTIONS CLAUSE_OBJECTS CLAUSE_WHENS CLAUSE_STOPS, EXPECTED_RETURN,
-# SPEND, MERGE_GRANTS.
+# SPEND, MERGE_GRANTS, MODE.
 fm_afk_contract_render_body() {  # <entered-iso> <entered-epoch>
   local entered=$1 entered_epoch=$2 ordinal=0 i as_given grant
   local accepted_block="" refused_block=""
@@ -385,6 +395,7 @@ fm_afk_contract_render_body() {  # <entered-iso> <entered-epoch>
   printf 'version: %s\n' "$FM_AFK_CONTRACT_VERSION"
   printf 'entered: %s\n' "$entered"
   printf 'entered_epoch: %s\n' "$entered_epoch"
+  printf 'mode: %s\n' "${MODE:-away}"
   printf 'expected_return: %s\n' "${EXPECTED_RETURN:--}"
   printf 'reach_channels: none\n'
   printf 'reach_announced: %s\n' "$FM_AFK_CONTRACT_REACH_ANNOUNCED"
@@ -754,9 +765,9 @@ fm_afk_contract_render_announcement() {  # <path>
 
 # --- subcommands ------------------------------------------------------------
 
-fm_afk_contract_parse_inputs() {  # <args...>; sets WORDS, the CLAUSE_* arrays, EXPECTED_RETURN, SPEND, MERGE_GRANTS
+fm_afk_contract_parse_inputs() {  # <args...>; sets WORDS, the CLAUSE_* arrays, EXPECTED_RETURN, SPEND, MERGE_GRANTS, MODE
   local words_file='' open=-1 grant
-  WORDS=; EXPECTED_RETURN=-; SPEND=$FM_AFK_CONTRACT_SPEND_DEFAULT
+  WORDS=; EXPECTED_RETURN=-; SPEND=$FM_AFK_CONTRACT_SPEND_DEFAULT; MODE=
   CLAUSE_ACTIONS=(); CLAUSE_OBJECTS=(); CLAUSE_WHENS=(); CLAUSE_STOPS=(); CLAUSE_STOP_GIVENS=()
   MERGE_GRANTS=()
   while [ "$#" -gt 0 ]; do
@@ -796,6 +807,11 @@ fm_afk_contract_parse_inputs() {  # <args...>; sets WORDS, the CLAUSE_* arrays, 
         case "$2" in ''|*[!0-9]*|0) fm_afk_contract_log "--spend must be a positive integer, got '$2'"; return 2 ;; esac
         SPEND=$2
         shift 2 ;;
+      --mode)
+        [ "$#" -gt 1 ] || { fm_afk_contract_log '--mode requires away or quiet'; return 2; }
+        case "$2" in away|quiet) ;; *) fm_afk_contract_log "--mode must be away or quiet, got '$2'"; return 2 ;; esac
+        MODE=$2
+        shift 2 ;;
       --grant)
         [ "$#" -gt 1 ] || { fm_afk_contract_log '--grant requires a task id'; return 2; }
         fm_afk_contract_grant_id_valid "$2" || {
@@ -831,6 +847,13 @@ fm_afk_contract_parse_inputs() {  # <args...>; sets WORDS, the CLAUSE_* arrays, 
 fm_afk_contract_cmd_propose() {
   local entered entered_epoch proposal rc=0 refused
   fm_afk_contract_parse_inputs "$@" || return 2
+  if [ -z "$MODE" ]; then
+    MODE=$(fm_afk_contract_read_field "$(fm_afk_contract_proposal_path)" mode 2>/dev/null || true)
+    if [ -z "$MODE" ]; then
+      MODE=$(fm_afk_contract_read_field "$(fm_afk_contract_path)" mode 2>/dev/null || true)
+    fi
+    case "$MODE" in quiet) ;; *) MODE=away ;; esac
+  fi
   entered=$(fm_afk_contract_now_iso)
   entered_epoch=$(date +%s)
   proposal=$(fm_afk_contract_proposal_path)

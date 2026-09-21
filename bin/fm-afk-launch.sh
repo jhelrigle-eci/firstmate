@@ -73,9 +73,13 @@
 # terminal (default bin/fm-afk-start.sh), so a topology test can run a harmless
 # placeholder instead of a real daemon. FM_SUPERVISOR_TARGET/FM_SUPERVISOR_BACKEND
 # override the captured captain pane/backend (an isolated lab pane in tests).
-# FM_AFK_MODE (away|quiet, default away) declares which mode a `start` entry
-# requests; leave it unset for a plain refresh of an already-running daemon
-# so its current mode is preserved (bin/fm-afk-start.sh fm_afk_flag_write).
+# FM_AFK_MODE (away|quiet, default away) declares which mode this entry
+# requests, on both halves of it: `propose` records it on the posture record
+# (the whole entry on Pi and pi-signed, where no flag is ever written) and
+# `start`/`start-native` writes it to state/.afk. Leave it unset for a plain
+# refresh so the standing mode is preserved on both the record
+# (bin/fm-afk-contract.sh propose) and the flag (bin/fm-afk-start.sh
+# fm_afk_flag_write).
 set -u
 
 FM_AFK_LAUNCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -227,7 +231,10 @@ fm_afk_launch_record_require() {
 
 fm_afk_launch_propose() {
   fm_afk_launch_catchup_pending && return 1
-  "$FM_AFK_CONTRACT_CMD" propose "$@"
+  case "${FM_AFK_MODE:-}" in
+    away|quiet) "$FM_AFK_CONTRACT_CMD" propose --mode "$FM_AFK_MODE" "$@" ;;
+    *) "$FM_AFK_CONTRACT_CMD" propose "$@" ;;
+  esac
 }
 
 fm_afk_launch_confirm() {
