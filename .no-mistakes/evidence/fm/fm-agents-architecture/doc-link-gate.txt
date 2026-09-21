@@ -1,0 +1,23 @@
+# Documentation link/audience gate (bin/fm-doc-audience-check.sh) driven against this change
+
+$ bin/fm-doc-audience-check.sh --root <tree at base 63ad7a9>
+fm-doc-audience-check: unclassified: docs/calm-cursor-herdr-mode-spec.md
+exit=1
+
+$ bin/fm-doc-audience-check.sh   # worktree at fd58c4f, repo inventory as committed
+fm-doc-audience-check: unclassified: docs/calm-cursor-herdr-mode-spec.md
+exit=1
+  (identical at base and head: the unclassified spec doc predates this change)
+
+$ bin/fm-doc-audience-check.sh --inventory <repo inventory + that pre-existing doc classified>   # worktree at fd58c4f
+fm-doc-audience-check: ok surfaces=103 local_links=420
+exit=0
+  (link validation now reached: every local link in every tracked markdown surface resolves, including the two new AGENTS.md pointers)
+
+$ # ADVERSARIAL: break the new section pointer docs/architecture.md -> docs/architecture-missing.md in a scratch copy of fd58c4f
+fm-doc-audience-check: unresolved local link in AGENTS.md: docs/architecture-missing.md
+exit=1
+
+$ # restore that pointer in the same scratch copy
+fm-doc-audience-check: ok surfaces=103 local_links=420
+exit=0

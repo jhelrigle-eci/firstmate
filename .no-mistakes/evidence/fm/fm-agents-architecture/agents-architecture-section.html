@@ -1,0 +1,13 @@
+<!doctype html><meta charset="utf-8">
+<title>AGENTS.md - Architecture at a glance (fd58c4f)</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown-light.css">
+<body style="margin:0;background:#f6f8fa">
+<div style="max-width:900px;margin:24px auto;padding:24px;background:#fff;border:1px solid #d0d7de;border-radius:6px">
+<div style="font:12px ui-monospace,monospace;color:#57606a;margin-bottom:12px">AGENTS.md lines 162-168, commit fd58c4f - the section this change adds, rendered by GitHub's own Markdown renderer</div>
+<article class="markdown-body"><h3>Architecture at a glance</h3>
+<p>Firstmate is a bash agent-orchestration template, not a compiled application: supervisor tooling in <code class="notranslate">bin/</code> plus Markdown contracts, with no build step, and its runtime is the long-running background watcher process <code class="notranslate">bin/fm-watch.sh</code> rather than a deployed service.<br>
+Section 1 lists the shared tracked material, and the tracked tree also holds documentation in <code class="notranslate">docs/</code>, suites in <code class="notranslate">tests/</code>, and harness-integration code in <code class="notranslate">.pi/extensions/</code>, <code class="notranslate">.omp/extensions/</code>, and <code class="notranslate">.opencode/plugins/</code>; the block above owns the private operational-home layout.<br>
+Tests are self-contained bash scripts named <code class="notranslate">tests/&lt;subject&gt;.test.sh</code> with shared helpers in <code class="notranslate">tests/lib.sh</code>, selected and run through <code class="notranslate">bin/fm-test-run.sh</code>.<br>
+Never commit the captain-private gitignored paths listed above and never touch another home's <code class="notranslate">FM_HOME</code>; hard rule 1 owns writes under <code class="notranslate">projects/</code>, including its exceptions.<br>
+<a href="docs/architecture.md"><code class="notranslate">docs/architecture.md</code></a> owns how these pieces fit together and <a href="CONTRIBUTING.md"><code class="notranslate">CONTRIBUTING.md</code></a> owns conventions and verification commands.</p></article>
+</div></body>

@@ -1,0 +1,14 @@
+# AGENTS.md architecture claim under test:
+#   "its runtime is the long-running background watcher process `bin/fm-watch.sh` rather than a deployed service"
+# Live drive: bin/fm-watch.sh run straight from the checkout (no build, no install) with an isolated FM_HOME.
+
+$ bin/fm-watch.sh & -> pid 98772
+sample 1: process[98772 00:02] singleton-lock=present liveness-beacon=14:56:28
+sample 2: process[98772 00:04] singleton-lock=present liveness-beacon=14:56:28
+sample 3: process[98772 00:06] singleton-lock=present liveness-beacon=14:56:28
+sample 4: process[98772 00:08] singleton-lock=present liveness-beacon=14:56:28
+sample 5: process[98772 00:13] singleton-lock=present liveness-beacon=14:56:28
+sample 6: process[98772 00:15] singleton-lock=present liveness-beacon=14:56:28
+
+$ tail of the watcher output (reason line it exits on, if any)
+(exit observed; the watcher blocks on the fleet, prints one wake reason, and is re-armed by the harness)

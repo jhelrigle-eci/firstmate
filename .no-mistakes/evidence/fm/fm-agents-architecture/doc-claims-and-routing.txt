@@ -1,0 +1,25 @@
+# Doc claims in the new AGENTS.md section, checked against the real tree and the real runner
+
+$ for p in ...; do git ls-files -- "$p" | wc -l; done
+docs                     tracked_files=60
+tests                    tracked_files=239
+.pi/extensions           tracked_files=16
+.omp/extensions          tracked_files=2
+.opencode/plugins        tracked_files=7
+bin/fm-watch.sh          tracked_files=1
+tests/lib.sh             tracked_files=1
+bin/fm-test-run.sh       tracked_files=1
+docs/architecture.md     tracked_files=1
+CONTRIBUTING.md          tracked_files=1
+
+$ bin/fm-test-run.sh --list --changed --base 63ad7a9   # how the product itself routes an AGENTS.md-only change
+tests/fm-agy-harness.test.sh
+tests/fm-arm-pretool-check.test.sh
+tests/fm-ask-user-authority.test.sh
+tests/fm-bearings-board.test.sh
+tests/fm-brief.test.sh
+... (38 suites in the contract-unit family)
+
+$ git diff --stat 63ad7a9 fd58c4f   # change stays inside AGENTS.md
+ AGENTS.md | 8 ++++++++
+ 1 file changed, 8 insertions(+)
