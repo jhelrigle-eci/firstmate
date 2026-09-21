@@ -603,13 +603,8 @@ test_declared_mode_round_trips_and_defaults_away() {
   contract "$home" validate >/dev/null || fail "a pre-field v1 record must still validate without a mode field"
   [ -z "$(contract "$home" field mode)" ] || fail "a stripped mode field read as a declared mode"
   printf 'mode: loud\n' >> "$record"
-  set +e
-  out=$(contract "$home" validate 2>&1)
-  rc=$?
-  set -e
-  [ "$rc" -ne 0 ] || fail "a record declaring an unknown mode validated"
-  assert_contains "$out" "declares mode 'loud'" 'unknown recorded mode refusal wording'
-  pass "the declared posture mode round-trips, defaults away, and refuses unknown spellings"
+  contract "$home" validate >/dev/null || fail "a record declaring an unknown mode must still validate"
+  pass "the declared posture mode round-trips, defaults away, and tolerates unknown spellings"
 }
 
 test_malformed_merge_grants_refuse_validation() {

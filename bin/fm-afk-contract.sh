@@ -594,7 +594,7 @@ fm_afk_contract_read_list() {  # <path> <section>
 # required scalar fields are present. Refuses rather than guessing at a foreign
 # schema.
 fm_afk_contract_validate() {  # <path> <require-confirmed 0|1>
-  local path=$1 require_confirmed=$2 version entered entered_epoch mode expected reach announced spend words_header confirmed
+  local path=$1 require_confirmed=$2 version entered entered_epoch expected reach announced spend words_header confirmed
   local clause_rows refused_rows clause refused id object when stop text decoded
   [ -f "$path" ] || return 1
   version=$(fm_afk_contract_read_field "$path" version)
@@ -606,11 +606,6 @@ fm_afk_contract_validate() {  # <path> <require-confirmed 0|1>
   fm_afk_contract_validate_iso "$entered" || { fm_afk_contract_log "record $path has no valid entered time"; return 1; }
   entered_epoch=$(fm_afk_contract_read_field "$path" entered_epoch)
   case "$entered_epoch" in ''|*[!0-9]*) fm_afk_contract_log "record $path has no entered_epoch"; return 1 ;; esac
-  mode=$(fm_afk_contract_read_field "$path" mode)
-  case "$mode" in
-    ''|away|quiet) ;;
-    *) fm_afk_contract_log "record $path declares mode '$mode', expected away or quiet"; return 1 ;;
-  esac
   expected=$(fm_afk_contract_read_field "$path" expected_return)
   [ "$expected" = - ] || fm_afk_contract_validate_iso "$expected" || { fm_afk_contract_log "record $path has no valid expected_return"; return 1; }
   reach=$(fm_afk_contract_read_field "$path" reach_channels)
