@@ -162,9 +162,9 @@ Treat `data/captain.md` as the domain-local record of captain preferences, optio
 ### Architecture at a glance
 
 Firstmate is a bash agent-orchestration template, not a compiled application: supervisor tooling in `bin/` plus Markdown contracts, with no build step and no runtime service of its own.
-Its tracked surface is `bin/` scripts, agent-loaded skills in `.agents/skills/`, installer-facing skills in `skills/`, documentation in `docs/`, suites in `tests/`, CI in `.github/workflows/`, and the root contracts; the block above owns the private operational-home layout.
+Beyond section 1's shared tracked material, the tracked tree also holds documentation in `docs/`, suites in `tests/`, and harness-integration code in `.pi/extensions/`, `.omp/extensions/`, `.opencode/plugins/`, and `.claude/mods/`; the block above owns the private operational-home layout.
 Tests are self-contained bash scripts named `tests/<subject>.test.sh` with shared helpers in `tests/lib.sh`, selected and run through `bin/fm-test-run.sh`.
-Leave the captain-private gitignored paths listed above, another home's `FM_HOME`, and anything under `projects/` alone.
+Never commit the captain-private gitignored paths listed above and never touch another home's `FM_HOME`; hard rule 1 owns writes under `projects/`, including its exceptions.
 [`docs/architecture.md`](docs/architecture.md) owns how these pieces fit together and [`CONTRIBUTING.md`](CONTRIBUTING.md) owns conventions and verification commands.
 
 ## 3. Session start (run once at every session start)
