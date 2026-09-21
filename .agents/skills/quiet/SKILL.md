@@ -28,14 +28,18 @@ exits it.
    Follow the `afk` skill's "What it does" steps 1-3 verbatim (terminal-
    backed vs harness-native entry, daemon-already-running refresh, never
    arming a separate `fm-watch.sh`) with one addition: export
-   `FM_AFK_MODE=quiet` in the shell that invokes `bin/fm-afk-launch.sh start`
-   (or `start-native`), so `state/.afk`'s first line reads `quiet` instead of
-   `away`.
+   `FM_AFK_MODE=quiet` in the shell that invokes every `bin/fm-afk-launch.sh`
+   entry command for this posture.
+   At `propose` it records `mode: quiet` on the away-posture record, which is
+   the whole entry - and so the only quiet signal - on Pi and pi-signed; at
+   `start` (or `start-native`) it makes `state/.afk`'s first line read `quiet`
+   instead of `away`.
    Leaving `FM_AFK_MODE` unset on a bare refresh of an already-running quiet
-   daemon is also correct and does nothing wrong: `fm_afk_flag_write`
-   preserves the on-disk mode when no explicit mode is given, so a plain
-   `/afk`-shaped refresh call never resets quiet back to away underneath the
-   captain.
+   daemon, or on a mandate refresh of a standing quiet record, is also correct
+   and does nothing wrong: `fm_afk_flag_write` and `bin/fm-afk-contract.sh
+   propose` both preserve the mode already on disk when no explicit mode is
+   given, so a plain `/afk`-shaped refresh call never resets quiet back to
+   away underneath the captain.
 
 2. **Acknowledge** in `AGENTS.md` section 9 language: "Captain, quiet mode is
    active; I will batch routine updates and surface only decisions, failures,

@@ -573,6 +573,45 @@ test_legacy_record_without_merge_grants_reads_empty() {
   pass "a pre-field v1 record reads as empty grants rather than skipping the field"
 }
 
+test_declared_mode_round_trips_and_defaults_away() {
+  local home record out rc
+  home=$(make_home mode-declared)
+  contract "$home" propose --mode quiet >/dev/null || fail "quiet proposal failed"
+  [ "$(contract "$home" field mode --proposal)" = quiet ] || fail "the proposal dropped the declared quiet mode"
+  contract "$home" confirm >/dev/null || fail "quiet confirm failed"
+  [ "$(contract "$home" field mode)" = quiet ] || fail "confirm dropped the declared quiet mode"
+  contract "$home" propose --words 'refreshed mandate' >/dev/null 2>&1 || fail "mandate refresh proposal failed"
+  contract "$home" confirm >/dev/null 2>&1 || fail "mandate refresh confirm failed"
+  [ "$(contract "$home" field mode)" = quiet ] || fail "a mandate refresh with no declared mode lost the standing quiet mode"
+
+  home=$(make_home mode-default)
+  contract "$home" propose >/dev/null || fail "default mode proposal failed"
+  contract "$home" confirm >/dev/null || fail "default mode confirm failed"
+  [ "$(contract "$home" field mode)" = away ] || fail "an undeclared mode did not record away"
+  set +e
+  out=$(contract "$home" propose --mode loud 2>&1)
+  rc=$?
+  set -e
+  [ "$rc" -eq 2 ] || fail "an unknown --mode should be a usage error (rc=$rc): $out"
+
+  home=$(make_home mode-legacy)
+  contract "$home" propose >/dev/null || fail "legacy mode proposal failed"
+  contract "$home" confirm >/dev/null || fail "legacy mode confirm failed"
+  record="$home/state/.afk-contract"
+  awk '!/^mode: /' "$record" > "$home/legacy" || fail "could not strip the mode field"
+  mv "$home/legacy" "$record"
+  contract "$home" validate >/dev/null || fail "a pre-field v1 record must still validate without a mode field"
+  [ -z "$(contract "$home" field mode)" ] || fail "a stripped mode field read as a declared mode"
+  printf 'mode: loud\n' >> "$record"
+  set +e
+  out=$(contract "$home" validate 2>&1)
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "a record declaring an unknown mode validated"
+  assert_contains "$out" "declares mode 'loud'" 'unknown recorded mode refusal wording'
+  pass "the declared posture mode round-trips, defaults away, and refuses unknown spellings"
+}
+
 test_malformed_merge_grants_refuse_validation() {
   local home record out rc
   home=$(make_home grants-malformed-scalar)
@@ -698,6 +737,7 @@ test_inputs_are_validated
 test_merge_grants_round_trip_and_read_back
 test_merge_grants_empty_form_and_usage_errors
 test_legacy_record_without_merge_grants_reads_empty
+test_declared_mode_round_trips_and_defaults_away
 test_malformed_merge_grants_refuse_validation
 test_archive_drops_live_grants
 test_record_changes_refuse_while_a_reader_holds_the_lock

@@ -324,17 +324,43 @@ test_return_is_mode_agnostic_for_quiet_mode() {
 }
 
 test_return_guard_allows_quiet_mode_ordinary_work() {
+  # The 2026-09-15 symptom: real /quiet entry always leaves the posture record
+  # on disk (bin/fm-afk-launch.sh requires a confirmed record), so the record's
+  # presence alone must not refuse bearings while the declared mode is quiet.
   local dir out
   dir="$TMP_ROOT/guard-quiet"
   install_runner "$dir"
+  contract_in "$dir" propose --words 'quiet while I watch' >/dev/null 2>&1 \
+    || fail "could not propose the posture record for the quiet case"
+  contract_in "$dir" confirm >/dev/null 2>&1 || fail "could not confirm the posture record for the quiet case"
   printf 'quiet\n%s\n' "$(date +%s)" > "$dir/home/state/.afk"
   FM_HOME="$dir/home" FM_STATE_OVERRIDE="$dir/home/state" "$dir/bin/fm-afk-return.sh" guard \
-    || fail "guard refused while quiet mode was active"
+    || fail "guard refused while quiet mode was active with the posture record present"
   out=$(FM_HOME="$dir/home" FM_STATE_OVERRIDE="$dir/home/state" "$ROOT/bin/fm-bearings-snapshot.sh" --json 2>&1) \
     || fail "bearings should run while quiet mode is active: $out"
   printf '%s' "$out" | jq -e '[.gates[].id] | index("(return-catchup)") | not' >/dev/null \
     || fail "quiet mode incorrectly surfaced return catch-up gating: $out"
-  pass "guard and bearings allow ordinary work while quiet mode is active"
+  pass "guard and bearings allow ordinary work while quiet mode is active under the posture record"
+}
+
+test_return_guard_allows_quiet_declared_on_the_posture_record() {
+  # Pi and pi-signed never write state/.afk at all, so the record's own
+  # declared mode is the only quiet signal there.
+  local dir out
+  dir="$TMP_ROOT/guard-quiet-record"
+  install_runner "$dir"
+  contract_in "$dir" propose --mode quiet --words 'quiet on pi' >/dev/null 2>&1 \
+    || fail "could not propose a quiet posture record"
+  contract_in "$dir" confirm >/dev/null 2>&1 || fail "could not confirm a quiet posture record"
+  [ ! -e "$dir/home/state/.afk" ] || fail "fixture error: the flagless Pi shape should have no away flag"
+  [ "$(contract_in "$dir" field mode)" = quiet ] || fail "the posture record did not record the declared quiet mode"
+  FM_HOME="$dir/home" FM_STATE_OVERRIDE="$dir/home/state" "$dir/bin/fm-afk-return.sh" guard \
+    || fail "guard refused while the posture record declared quiet with no away flag"
+  out=$(FM_HOME="$dir/home" FM_STATE_OVERRIDE="$dir/home/state" "$ROOT/bin/fm-bearings-snapshot.sh" --json 2>&1) \
+    || fail "bearings should run while the record declares quiet: $out"
+  printf '%s' "$out" | jq -e '[.gates[].id] | index("(return-catchup)") | not' >/dev/null \
+    || fail "a quiet posture record incorrectly surfaced return catch-up gating: $out"
+  pass "the read-only guard honours quiet declared on the posture record where no away flag exists"
 }
 
 test_check_retries_recorded_terminal_teardown() {
@@ -805,6 +831,7 @@ test_evidence_publication_failure_preserves_wake_for_redrain
 test_away_reentry_refuses_pending_return_gate
 test_return_is_mode_agnostic_for_quiet_mode
 test_return_guard_allows_quiet_mode_ordinary_work
+test_return_guard_allows_quiet_declared_on_the_posture_record
 test_check_retries_recorded_terminal_teardown
 test_unreadable_superseded_archive_keeps_return_gated
 test_missing_final_archive_keeps_retained_contract_gated
