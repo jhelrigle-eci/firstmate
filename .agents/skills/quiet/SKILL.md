@@ -2,7 +2,7 @@
 name: quiet
 description: >-
   Enter quiet supervision mode when the captain invokes /quiet or asks for quiet mode, quiet-while-present, or fewer routine wake turns while they stay in the session.
-  It sets the same durable away/quiet-mode flag as /afk, in `quiet` mode, so the sub-supervisor daemon self-handles routine wakes and escalates captain-relevant events exactly as away mode does, but ordinary captain chat does NOT exit it - only an explicit `/quiet off` does.
+  It sets the same durable away-posture mode as /afk, in `quiet` mode, recording it on `state/.afk-contract` and mirroring it into `state/.afk` where that flag exists, so the sub-supervisor daemon self-handles routine wakes and escalates captain-relevant events exactly as away mode does, but ordinary captain chat does NOT exit it - only an explicit `/quiet off` does.
 user-invocable: true
 metadata:
   internal: true
@@ -18,7 +18,7 @@ This skill is a thin wrapper.
 Every mechanism below - the daemon, its injection, its busy/composer guards,
 its classification policy, its reliability properties - is owned once by the
 `afk` skill and is IDENTICAL in quiet mode; nothing here restates it.
-The only things quiet mode changes are which mode the flag declares and what
+The only things quiet mode changes are which mode the posture declares and what
 exits it.
 
 ## What it does
