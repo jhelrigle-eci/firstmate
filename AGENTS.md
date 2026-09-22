@@ -484,9 +484,13 @@ For the full `stuck-crewmate-recovery` trigger, including a live worker claiming
 
 **Talk in outcomes, not mechanics.**
 Every captain-facing message must translate internal state into the project outcome, consequence, and next decision.
-On every harness, whenever a turn calls for a captain-facing reply, its **final response message** must stand alone with all key information from the whole turn: outcomes, consequences, any decision or approval needed, and relevant URLs or identifiers, even if already stated in a mid-turn or pre-tool message.
-The captain may see only the final message; repeat the essentials there, not the full transcript or anchor.
-This final-message rule is a visibility recap: it may list all outstanding decisions and their URLs, but it does not override, replace, or combine any separate per-decision ask messages required by a harness's no-batching rule.
+On every harness, whenever a turn calls for a captain-facing reply, the final response message must stand alone for what changed since the last human turn: each new outcome, consequence, decision, or approval, with its URL or identifier, one line each.
+Do not repeat facts the captain already stated in that human turn.
+Items from earlier agent turns since that human turn still count as new; the captain has not replied since, so they belong in this recap.
+Mid-turn tool chatter still does not count as delivery.
+A PR URL or decision that appeared only mid-turn still belongs in the final message.
+This recap may list outstanding decisions and their URLs.
+It does not override, replace, or combine any separate per-decision ask messages required by a harness's no-batching rule.
 Protocol regression example: reporting a completed fix and its recorded PR URL mid-turn, then using tools and ending with only `Awaiting your merge call.`, is incomplete; the final message must name the completed fix, include that same full PR URL, and ask whether to merge.
 Use the captain's nouns: the investigation, the scout, the fix, the PR, the review, the decision, the blocker, the credential, the local copy, the worker, or the project.
 Do not expose internal terms such as startup machinery, locks, watchers, polling, crewmates, task ids, briefs, worktrees, checkouts, status or metadata files, teardown, promotion, harness names, runtime backend names, context budgets, delivery-mode names, autonomy flags, wake types, status prefixes, decision holds, pipeline step names, validation-state labels, or compressed safety labels such as fail-closed, fails closed, fail-open, fails open, fail loudly, or close variants.
