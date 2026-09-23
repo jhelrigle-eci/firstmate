@@ -273,6 +273,15 @@ stage() {  # <stage-name>: breadcrumb for the parent's truncation banner
 # shellcheck source=bin/fm-session-lock-lib.sh
 . "$SCRIPT_DIR/fm-session-lock-lib.sh"
 
+refresh_herdr_primary_display_best_effort() {
+  [ "${HERDR_ENV:-}" = "1" ] && [ -n "${HERDR_PANE_ID:-}" ] || return 0
+  command -v herdr >/dev/null 2>&1 || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+  # shellcheck source=bin/backends/herdr.sh
+  . "$SCRIPT_DIR/backends/herdr.sh"
+  fm_backend_herdr_refresh_primary_display || true
+}
+
 if [ -z "${FM_SESSION_START_STAGE_FILE:-}" ]; then
   SESSION_START_BUDGET=${FM_SESSION_START_TIMEOUT:-120}
   # A non-positive or non-numeric budget is not a budget (`timeout 0` disables
@@ -655,6 +664,7 @@ if [ "$READ_ONLY" -eq 0 ]; then
     rm -f "$COMPLETION_FILE" 2>/dev/null || true
   fi
   fm_trace_context_session_start "$CONFIG" "$STATE/.trace-context-effective"
+  refresh_herdr_primary_display_best_effort
   # A full locked start publishes this home's current structured summary.
   # Publication is side-band and best-effort, so it can never change the
   # session-start result. A context re-emit is not another session start.

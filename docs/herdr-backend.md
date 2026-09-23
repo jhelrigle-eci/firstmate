@@ -77,6 +77,21 @@ Existing task operations use recorded endpoint ids and do not move a live task w
 The per-home workspace is reused while it has task tabs.
 Closing its last tab can remove the workspace, and the next spawn recreates it.
 
+## Sidebar display metadata
+
+Herdr sidebar presentation uses display-only fields that never feed endpoint selection, ownership, recovery, or cleanup authority.
+At startup in the primary home, Firstmate refreshes its own pane label to `firstmate` and reports `fm_name=firstmate` for the owning workspace.
+For spawned Herdr workers, Firstmate renames the pane to `└ <concise-task>`, such as `└ crew-model-refresh` from `fm-fm-crew-model-refresh`.
+Projected workspaces publish `fm_name=└ <concise-task>` through `workspace report-metadata --token fm_name=<name>` so Spaces can show a clean child row.
+Projected workspaces also publish `branch=<worktree-branch>` from the task's own isolated worktree so Spaces does not repeat the primary checkout branch across every projected workspace.
+Flat per-home workspaces publish the home display name (`firstmate` or `2ndmate-<id>`) instead of a task name.
+Worker panes also publish `model=<resolved-model>` through `pane report-metadata`, using the exact model value resolved for that spawn or relaunch and recorded in task metadata.
+When the resolved model changes on relaunch, the pane token is overwritten with the new value.
+Primary refresh clears the pane `model` token unless a structural source can prove one.
+Current supported primary launch context exposes `CURSOR_INVOKED_AS`, `CURSOR_PROJECT_DIR`, and `CURSOR_VERSION` only, so no trustworthy primary model token is available today.
+Metadata updates use one home-stable `--source` identity with a monotonic per-home `--seq` counter owned by `bin/backends/herdr.sh`.
+Display update failures warn and continue, and they do not block a safe spawn or alter authoritative labels.
+
 ## Presentation spaces
 
 Each new crewmate or scout is placed in a disposable one-task workspace by default, on Herdr 0.8.0 and newer.

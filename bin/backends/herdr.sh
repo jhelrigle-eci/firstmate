@@ -135,6 +135,11 @@ FM_BACKEND_HERDR_PRESENTATION_FLOOR_MARKER_PREFIX=".herdr-presentation-floor-"
 # ->blocked edge and a reconnect level-reconcile never re-delivers a still-
 # blocked pane. Mirrors bin/fm-watch.sh's .stale-<key> naming.
 FM_BACKEND_HERDR_ESCALATED_PREFIX=".herdr-escalated-"
+# Display-only metadata owner for Herdr sidebars. This never feeds endpoint
+# resolution, lifecycle authority, or task ownership.
+FM_BACKEND_HERDR_DISPLAY_SOURCE_PREFIX="fm-display"
+FM_BACKEND_HERDR_DISPLAY_SEQ_FILE=".herdr-display-seq"
+FM_BACKEND_HERDR_DISPLAY_SEQ_LOCK=".herdr-display-seq.lock"
 # .fm-secondmate-home is written by bin/fm-home-seed.sh (AGENTS.md section 6)
 # at a seeded secondmate home's root, containing exactly that secondmate's id.
 # The primary firstmate home never carries this marker.
@@ -771,6 +776,207 @@ fm_backend_herdr_projection_concise_task_label() {  # <task-id>
 # Labels and tokens remain non-authoritative correlators only.
 fm_backend_herdr_projection_workspace_label() {  # <task-id> <projection-id>
   printf '└ %s · p:%s' "$(fm_backend_herdr_projection_concise_task_label "$1")" "$2"
+}
+
+# fm_backend_herdr_display_name_from_task_label: the concise display-only task
+# name used for pane labels and workspace metadata.
+fm_backend_herdr_display_name_from_task_label() {  # <task-label>
+  local label=$1
+  [ -n "$label" ] || return 1
+  case "$label" in
+    fm-*) label=${label#fm-} ;;
+  esac
+  label=$(fm_backend_herdr_projection_concise_task_label "$label")
+  [ -n "$label" ] || return 1
+  printf '%s' "$label"
+}
+
+fm_backend_herdr_display_child_name_from_task_label() {  # <task-label>
+  local label
+  label=$(fm_backend_herdr_display_name_from_task_label "$1") || return 1
+  printf '└ %s' "$label"
+}
+
+fm_backend_herdr_display_pane_label() {  # <task-label>
+  local task_label=$1 pane_name
+  [ -n "$task_label" ] || return 1
+  if [ "$task_label" = firstmate ]; then
+    printf 'firstmate'
+    return 0
+  fi
+  pane_name=$(fm_backend_herdr_display_child_name_from_task_label "$task_label" 2>/dev/null || true)
+  [ -n "$pane_name" ] || pane_name=$task_label
+  printf '%s' "$pane_name"
+}
+
+fm_backend_herdr_display_state_dir() {
+  printf '%s' "${FM_STATE_OVERRIDE:-$FM_HOME/state}"
+}
+
+fm_backend_herdr_display_source_id() {
+  local home_id digest
+  if [ -n "${FM_BACKEND_HERDR_DISPLAY_SOURCE_ID:-}" ]; then
+    printf '%s' "$FM_BACKEND_HERDR_DISPLAY_SOURCE_ID"
+    return 0
+  fi
+  home_id=$(fm_backend_herdr_projection_home_identity "$FM_HOME" 2>/dev/null || printf '%s' "$FM_HOME")
+  if command -v shasum >/dev/null 2>&1; then
+    digest=$(printf '%s' "$home_id" | shasum -a 256 2>/dev/null | awk '{print $1}')
+  elif command -v sha256sum >/dev/null 2>&1; then
+    digest=$(printf '%s' "$home_id" | sha256sum 2>/dev/null | awk '{print $1}')
+  else
+    digest=$(printf '%s' "$home_id" | tr -cd '[:alnum:]' | cut -c1-16)
+  fi
+  digest=${digest:0:16}
+  [ -n "$digest" ] || digest=home
+  FM_BACKEND_HERDR_DISPLAY_SOURCE_ID="$FM_BACKEND_HERDR_DISPLAY_SOURCE_PREFIX-$digest"
+  printf '%s' "$FM_BACKEND_HERDR_DISPLAY_SOURCE_ID"
+}
+
+# Monotonic sequence owner for Herdr workspace report-metadata updates.
+fm_backend_herdr_display_seq_next() {
+  local state seq_path lock_path tries current next tmp
+  state=$(fm_backend_herdr_display_state_dir) || return 1
+  [ -n "$state" ] || return 1
+  mkdir -p "$state" 2>/dev/null || return 1
+  seq_path="$state/$FM_BACKEND_HERDR_DISPLAY_SEQ_FILE"
+  lock_path="$state/$FM_BACKEND_HERDR_DISPLAY_SEQ_LOCK"
+  tries=0
+  while ! mkdir "$lock_path" 2>/dev/null; do
+    tries=$((tries + 1))
+    [ "$tries" -lt 100 ] || return 1
+    sleep 0.01
+  done
+  current=0
+  if [ -f "$seq_path" ]; then
+    current=$(cat "$seq_path" 2>/dev/null || printf '0')
+  fi
+  case "$current" in
+    ''|*[!0-9]*) current=0 ;;
+  esac
+  next=$((current + 1))
+  tmp="$seq_path.tmp.${BASHPID:-$$}"
+  if ! printf '%s\n' "$next" > "$tmp" 2>/dev/null \
+    || ! mv -f "$tmp" "$seq_path" 2>/dev/null; then
+    rm -f "$tmp" 2>/dev/null || true
+    rmdir "$lock_path" 2>/dev/null || true
+    return 1
+  fi
+  rmdir "$lock_path" 2>/dev/null || true
+  printf '%s' "$next"
+}
+
+fm_backend_herdr_workspace_branch_token_from_worktree() {  # <worktree>
+  local worktree=$1 branch
+  [ -n "$worktree" ] && [ -d "$worktree" ] || return 1
+  branch=$(git -C "$worktree" symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+  if [ -z "$branch" ]; then
+    branch=$(git -C "$worktree" rev-parse --short HEAD 2>/dev/null || true)
+  fi
+  [ -n "$branch" ] || return 1
+  printf '%s' "$branch"
+}
+
+fm_backend_herdr_workspace_report_fm_name() {  # <session> <workspace-id> <display-name> [branch-token]
+  local session=$1 workspace=$2 name=$3 source seq branch_token branch_token_set=0
+  local -a cmd
+  [ -n "$session" ] && [ -n "$workspace" ] && [ -n "$name" ] || return 1
+  if [ "$#" -ge 4 ]; then
+    branch_token_set=1
+    branch_token=$4
+  fi
+  source=$(fm_backend_herdr_display_source_id) || return 1
+  seq=$(fm_backend_herdr_display_seq_next) || return 1
+  cmd=(workspace report-metadata "$workspace" --source "$source" --token "fm_name=$name")
+  if [ "$branch_token_set" -eq 1 ]; then
+    if [ -n "$branch_token" ]; then
+      cmd+=(--token "branch=$branch_token")
+    else
+      cmd+=(--clear-token branch)
+    fi
+  fi
+  cmd+=(--seq "$seq")
+  fm_backend_herdr_cli "$session" "${cmd[@]}" >/dev/null 2>&1
+}
+
+fm_backend_herdr_pane_report_model_token() {  # <session> <pane-id> [model-token]
+  local session=$1 pane=$2 model_token=${3:-} source seq
+  [ -n "$session" ] && [ -n "$pane" ] || return 1
+  source=$(fm_backend_herdr_display_source_id) || return 1
+  seq=$(fm_backend_herdr_display_seq_next) || return 1
+  if [ -n "$model_token" ]; then
+    fm_backend_herdr_cli "$session" pane report-metadata \
+      "$pane" --source "$source" --token "model=$model_token" --seq "$seq" >/dev/null 2>&1
+  else
+    fm_backend_herdr_cli "$session" pane report-metadata \
+      "$pane" --source "$source" --clear-token model --seq "$seq" >/dev/null 2>&1
+  fi
+}
+
+# Herdr and Cursor currently expose no verified primary model field in their
+# stable launch context for this process. Cursor's documented exported markers
+# are CURSOR_INVOKED_AS, CURSOR_PROJECT_DIR, and CURSOR_VERSION.
+fm_backend_herdr_primary_model_token() {
+  return 1
+}
+
+# Best-effort display update for one task pane/workspace. This is display-only:
+# endpoint labels and task metadata remain authoritative.
+fm_backend_herdr_refresh_task_display() {  # <session> <pane-id> <workspace-id> <task-label> [workspace-display-name] [model-token] [workspace-branch-worktree]
+  local session=$1 pane=$2 workspace=$3 task_label=$4 workspace_name=${5:-} model_token=${6:-}
+  local branch_worktree=${7:-} workspace_branch_token workspace_branch_token_set=0
+  local pane_name warned=0
+  [ -n "$session" ] && [ -n "$pane" ] && [ -n "$workspace" ] && [ -n "$task_label" ] || return 1
+  pane_name=$(fm_backend_herdr_display_pane_label "$task_label" 2>/dev/null || true)
+  [ -n "$pane_name" ] || pane_name="$task_label"
+  [ -n "$workspace_name" ] || workspace_name="$pane_name"
+  if [ -n "$branch_worktree" ]; then
+    workspace_branch_token_set=1
+    workspace_branch_token=$(fm_backend_herdr_workspace_branch_token_from_worktree "$branch_worktree" 2>/dev/null || true)
+    if [ -z "$workspace_branch_token" ]; then
+      workspace_branch_token=""
+      echo "warning: herdr display-only workspace branch metadata refresh for $task_label failed; keeping authoritative workspace labels unchanged" >&2
+      warned=1
+    fi
+  fi
+  if ! fm_backend_herdr_cli "$session" pane rename "$pane" "$pane_name" >/dev/null 2>&1; then
+    echo "warning: herdr display-only pane rename for $task_label failed; keeping authoritative endpoint labels unchanged" >&2
+    warned=1
+  fi
+  if [ "$workspace_branch_token_set" -eq 1 ]; then
+    if ! fm_backend_herdr_workspace_report_fm_name "$session" "$workspace" "$workspace_name" "$workspace_branch_token"; then
+      echo "warning: herdr display-only workspace metadata refresh for $task_label failed; keeping authoritative workspace labels unchanged" >&2
+      warned=1
+    fi
+  elif ! fm_backend_herdr_workspace_report_fm_name "$session" "$workspace" "$workspace_name"; then
+    echo "warning: herdr display-only workspace metadata refresh for $task_label failed; keeping authoritative workspace labels unchanged" >&2
+    warned=1
+  fi
+  if ! fm_backend_herdr_pane_report_model_token "$session" "$pane" "$model_token"; then
+    echo "warning: herdr display-only pane metadata refresh for $task_label failed; keeping authoritative pane identity unchanged" >&2
+    warned=1
+  fi
+  [ "$warned" -eq 0 ]
+}
+
+# Best-effort startup refresh for the primary firstmate pane/workspace.
+fm_backend_herdr_refresh_primary_display() {
+  local session pane workspace info primary_model
+  [ "${HERDR_ENV:-}" = "1" ] && [ -n "${HERDR_PANE_ID:-}" ] || return 0
+  [ "$(fm_backend_herdr_workspace_label)" = firstmate ] || return 0
+  session=${HERDR_SESSION:-$(fm_backend_herdr_session)}
+  pane=$HERDR_PANE_ID
+  info=$(fm_backend_herdr_cli "$session" pane get "$pane" 2>/dev/null) || {
+    echo "warning: herdr display refresh could not read the primary pane identity; keeping authoritative labels unchanged" >&2
+    return 1
+  }
+  workspace=$(printf '%s' "$info" | jq -r '.result.pane.workspace_id // empty' 2>/dev/null)
+  if [ -z "$workspace" ]; then
+    echo "warning: herdr display refresh could not read the primary workspace id; keeping authoritative labels unchanged" >&2
+    return 1
+  fi
+  primary_model=$(fm_backend_herdr_primary_model_token 2>/dev/null || true)
+  fm_backend_herdr_refresh_task_display "$session" "$pane" "$workspace" "firstmate" "firstmate" "$primary_model"
 }
 
 # fm_backend_herdr_presentation_session_lock_path: one machine-private lock
