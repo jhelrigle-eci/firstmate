@@ -866,13 +866,37 @@ fm_backend_herdr_display_seq_next() {
   printf '%s' "$next"
 }
 
-fm_backend_herdr_workspace_report_fm_name() {  # <session> <workspace-id> <display-name>
-  local session=$1 workspace=$2 name=$3 source seq
+fm_backend_herdr_workspace_branch_token_from_worktree() {  # <worktree>
+  local worktree=$1 branch
+  [ -n "$worktree" ] && [ -d "$worktree" ] || return 1
+  branch=$(git -C "$worktree" symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+  if [ -z "$branch" ]; then
+    branch=$(git -C "$worktree" rev-parse --short HEAD 2>/dev/null || true)
+  fi
+  [ -n "$branch" ] || return 1
+  printf '%s' "$branch"
+}
+
+fm_backend_herdr_workspace_report_fm_name() {  # <session> <workspace-id> <display-name> [branch-token]
+  local session=$1 workspace=$2 name=$3 source seq branch_token branch_token_set=0
+  local -a cmd
   [ -n "$session" ] && [ -n "$workspace" ] && [ -n "$name" ] || return 1
+  if [ "$#" -ge 4 ]; then
+    branch_token_set=1
+    branch_token=$4
+  fi
   source=$(fm_backend_herdr_display_source_id) || return 1
   seq=$(fm_backend_herdr_display_seq_next) || return 1
-  fm_backend_herdr_cli "$session" workspace report-metadata \
-    --source "$source" "$workspace" --token "fm_name=$name" --seq "$seq" >/dev/null 2>&1
+  cmd=(workspace report-metadata "$workspace" --source "$source" --token "fm_name=$name")
+  if [ "$branch_token_set" -eq 1 ]; then
+    if [ -n "$branch_token" ]; then
+      cmd+=(--token "branch=$branch_token")
+    else
+      cmd+=(--clear-token branch)
+    fi
+  fi
+  cmd+=(--seq "$seq")
+  fm_backend_herdr_cli "$session" "${cmd[@]}" >/dev/null 2>&1
 }
 
 fm_backend_herdr_pane_report_model_token() {  # <session> <pane-id> [model-token]
@@ -882,10 +906,10 @@ fm_backend_herdr_pane_report_model_token() {  # <session> <pane-id> [model-token
   seq=$(fm_backend_herdr_display_seq_next) || return 1
   if [ -n "$model_token" ]; then
     fm_backend_herdr_cli "$session" pane report-metadata \
-      --source "$source" "$pane" --token "model=$model_token" --seq "$seq" >/dev/null 2>&1
+      "$pane" --source "$source" --token "model=$model_token" --seq "$seq" >/dev/null 2>&1
   else
     fm_backend_herdr_cli "$session" pane report-metadata \
-      --source "$source" "$pane" --clear-token model --seq "$seq" >/dev/null 2>&1
+      "$pane" --source "$source" --clear-token model --seq "$seq" >/dev/null 2>&1
   fi
 }
 
@@ -898,18 +922,33 @@ fm_backend_herdr_primary_model_token() {
 
 # Best-effort display update for one task pane/workspace. This is display-only:
 # endpoint labels and task metadata remain authoritative.
-fm_backend_herdr_refresh_task_display() {  # <session> <pane-id> <workspace-id> <task-label> [workspace-display-name] [model-token]
+fm_backend_herdr_refresh_task_display() {  # <session> <pane-id> <workspace-id> <task-label> [workspace-display-name] [model-token] [workspace-branch-worktree]
   local session=$1 pane=$2 workspace=$3 task_label=$4 workspace_name=${5:-} model_token=${6:-}
+  local branch_worktree=${7:-} workspace_branch_token workspace_branch_token_set=0
   local pane_name warned=0
   [ -n "$session" ] && [ -n "$pane" ] && [ -n "$workspace" ] && [ -n "$task_label" ] || return 1
   pane_name=$(fm_backend_herdr_display_pane_label "$task_label" 2>/dev/null || true)
   [ -n "$pane_name" ] || pane_name="$task_label"
   [ -n "$workspace_name" ] || workspace_name="$pane_name"
+  if [ -n "$branch_worktree" ]; then
+    workspace_branch_token_set=1
+    workspace_branch_token=$(fm_backend_herdr_workspace_branch_token_from_worktree "$branch_worktree" 2>/dev/null || true)
+    if [ -z "$workspace_branch_token" ]; then
+      workspace_branch_token=""
+      echo "warning: herdr display-only workspace branch metadata refresh for $task_label failed; keeping authoritative workspace labels unchanged" >&2
+      warned=1
+    fi
+  fi
   if ! fm_backend_herdr_cli "$session" pane rename "$pane" "$pane_name" >/dev/null 2>&1; then
     echo "warning: herdr display-only pane rename for $task_label failed; keeping authoritative endpoint labels unchanged" >&2
     warned=1
   fi
-  if ! fm_backend_herdr_workspace_report_fm_name "$session" "$workspace" "$workspace_name"; then
+  if [ "$workspace_branch_token_set" -eq 1 ]; then
+    if ! fm_backend_herdr_workspace_report_fm_name "$session" "$workspace" "$workspace_name" "$workspace_branch_token"; then
+      echo "warning: herdr display-only workspace metadata refresh for $task_label failed; keeping authoritative workspace labels unchanged" >&2
+      warned=1
+    fi
+  elif ! fm_backend_herdr_workspace_report_fm_name "$session" "$workspace" "$workspace_name"; then
     echo "warning: herdr display-only workspace metadata refresh for $task_label failed; keeping authoritative workspace labels unchanged" >&2
     warned=1
   fi

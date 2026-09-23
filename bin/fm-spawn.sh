@@ -3168,9 +3168,11 @@ EOF
       exit 1
     fi
     HERDR_WORKSPACE_DISPLAY_NAME=
+    HERDR_WORKSPACE_BRANCH_WT=
     HERDR_MODEL_DISPLAY_TOKEN=${MODEL:-default}
     if [ "$HERDR_PROJECTED" -eq 1 ]; then
       HERDR_WORKSPACE_DISPLAY_NAME=$(fm_backend_herdr_display_child_name_from_task_label "$W" 2>/dev/null || true)
+      HERDR_WORKSPACE_BRANCH_WT=$WT
     else
       HERDR_WORKSPACE_DISPLAY_NAME=$(FM_HOME="$HERDR_LABEL_HOME" fm_backend_herdr_workspace_label 2>/dev/null || true)
     fi
@@ -4517,7 +4519,7 @@ if [ "${HERDR_PROJECTED:-0}" -eq 1 ]; then
 fi
 if [ "${HERDR_DISPLAY_REFRESH_PENDING:-0}" -eq 1 ]; then
   if ! FM_HOME="$HERDR_LABEL_HOME" fm_backend_herdr_refresh_task_display \
-    "$HERDR_SES" "$HERDR_PANE_ID" "$HERDR_WORKSPACE_ID" "$W" "$HERDR_WORKSPACE_DISPLAY_NAME" "$HERDR_MODEL_DISPLAY_TOKEN"; then
+    "$HERDR_SES" "$HERDR_PANE_ID" "$HERDR_WORKSPACE_ID" "$W" "$HERDR_WORKSPACE_DISPLAY_NAME" "$HERDR_MODEL_DISPLAY_TOKEN" "$HERDR_WORKSPACE_BRANCH_WT"; then
     echo "warning: herdr display refresh for $ID could not be confirmed; keeping authoritative endpoint identity unchanged" >&2
   fi
 fi

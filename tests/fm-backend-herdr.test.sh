@@ -373,6 +373,33 @@ test_refresh_task_display_renames_pane_and_reports_workspace_fm_name() {
   pass "fm_backend_herdr_refresh_task_display: writes indented pane labels, fm_name, and model metadata with one owned source+sequence"
 }
 
+test_refresh_task_display_reports_per_workspace_branch_tokens() {
+  local dir log resp fb state repo wt_b meta_a meta_b
+  dir="$TMP_ROOT/display-task-branches"; mkdir -p "$dir/responses" "$dir/state"; log="$dir/log"; resp="$dir/responses"; : > "$log"
+  state="$dir/state"
+  repo="$dir/repo"
+  wt_b="$dir/worktree-b"
+  fm_git_worktree "$repo" "$wt_b" fm-branch-b
+  git -C "$repo" checkout -q -b fm-branch-a
+  fb=$(make_herdr_fakebin "$dir")
+  PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_STATE_OVERRIDE="$state" \
+    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_refresh_task_display lab w1:p1 w1 fm-task-a "└ task-a" cursor-grok-4.6-high "$1"; fm_backend_herdr_refresh_task_display lab w2:p1 w2 fm-task-b "└ task-b" cursor-grok-4.6-high "$2"' "$ROOT" "$repo" "$wt_b" >/dev/null
+  expect_code 0 $? "display refresh should succeed for both projected workspaces"
+  meta_a=$(awk -F$'\x1f' '$2 == "workspace" && $3 == "report-metadata" && $4 == "w1" { print; exit }' "$log")
+  [ -n "$meta_a" ] || fail "workspace metadata for w1 was not reported"
+  case "$meta_a" in
+    *$'\x1f''--token'$'\x1f''branch=fm-branch-a'*) ;;
+    *) fail "workspace w1 metadata did not report branch=fm-branch-a: $meta_a" ;;
+  esac
+  meta_b=$(awk -F$'\x1f' '$2 == "workspace" && $3 == "report-metadata" && $4 == "w2" { print; exit }' "$log")
+  [ -n "$meta_b" ] || fail "workspace metadata for w2 was not reported"
+  case "$meta_b" in
+    *$'\x1f''--token'$'\x1f''branch=fm-branch-b'*) ;;
+    *) fail "workspace w2 metadata did not report branch=fm-branch-b: $meta_b" ;;
+  esac
+  pass "fm_backend_herdr_refresh_task_display: reports each projected workspace branch from its own worktree"
+}
+
 test_workspace_fm_name_metadata_sequence_is_monotonic_per_home() {
   local dir log resp fb state seq_values source_values first_source second_source first_seq second_seq
   dir="$TMP_ROOT/display-metadata-seq"; mkdir -p "$dir/responses" "$dir/state"; log="$dir/log"; resp="$dir/responses"; : > "$log"
@@ -5355,6 +5382,7 @@ test_workspace_label_empty_marker_falls_back_to_primary
 test_workspace_label_different_secondmates_get_different_labels
 test_display_name_from_task_label_strips_owner_and_fm_prefixes
 test_refresh_task_display_renames_pane_and_reports_workspace_fm_name
+test_refresh_task_display_reports_per_workspace_branch_tokens
 test_workspace_fm_name_metadata_sequence_is_monotonic_per_home
 test_refresh_primary_display_renames_firstmate_pane_and_reports_fm_name
 test_refresh_task_display_warns_without_failing_spawn_paths
