@@ -2973,6 +2973,7 @@ if [ -e "$STATE/$ID.backlog-close" ] || [ -L "$STATE/$ID.backlog-close" ]; then
 fi
 
 W="fm-$ID"
+HERDR_DISPLAY_REFRESH_PENDING=0
 if [ "$RELAUNCH" -eq 1 ]; then
   # Adopt the recorded endpoint instead of creating one. This is what keeps a
   # relaunch a REPLACEMENT rather than a second copy of the task: no new
@@ -3166,7 +3167,23 @@ EOF
       echo "error: herdr did not return a tab/pane id for $W" >&2
       exit 1
     fi
+    HERDR_WORKSPACE_DISPLAY_NAME=
+    HERDR_MODEL_DISPLAY_TOKEN=${MODEL:-default}
+    if [ "$HERDR_PROJECTED" -eq 1 ]; then
+      HERDR_WORKSPACE_DISPLAY_NAME=$(fm_backend_herdr_display_child_name_from_task_label "$W" 2>/dev/null || true)
+    else
+      HERDR_WORKSPACE_DISPLAY_NAME=$(FM_HOME="$HERDR_LABEL_HOME" fm_backend_herdr_workspace_label 2>/dev/null || true)
+    fi
+    HERDR_DISPLAY_REFRESH_PENDING=1
     T="$HERDR_SES:$HERDR_PANE_ID"
+    # Presentation mutations are done once endpoint ids are finalized.
+    # Release the shared session lock before the rest of spawn so a concurrent
+    # relaunch can reclaim its own projected pane instead of failing fast on
+    # lock contention. Abort cleanup still reacquires this lock if a later step
+    # fails with HERDR_PROJECTION_ABORT_CLEANUP still armed.
+    if [ "${HERDR_PROJECTED:-0}" -eq 1 ]; then
+      spawn_herdr_presentation_order_lock_release
+    fi
     ;;
   zellij)
     ZELLIJ_SES=$(fm_backend_zellij_container_ensure) || exit 1
@@ -4497,6 +4514,12 @@ sleep 0.3
 if [ "${HERDR_PROJECTED:-0}" -eq 1 ]; then
   HERDR_PROJECTION_ABORT_CLEANUP=0
   spawn_herdr_presentation_order_lock_release
+fi
+if [ "${HERDR_DISPLAY_REFRESH_PENDING:-0}" -eq 1 ]; then
+  if ! FM_HOME="$HERDR_LABEL_HOME" fm_backend_herdr_refresh_task_display \
+    "$HERDR_SES" "$HERDR_PANE_ID" "$HERDR_WORKSPACE_ID" "$W" "$HERDR_WORKSPACE_DISPLAY_NAME" "$HERDR_MODEL_DISPLAY_TOKEN"; then
+    echo "warning: herdr display refresh for $ID could not be confirmed; keeping authoritative endpoint identity unchanged" >&2
+  fi
 fi
 spawn_send_key "$T" Enter
 if [ "$HARNESS" = kimi ]; then

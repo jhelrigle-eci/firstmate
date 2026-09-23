@@ -323,6 +323,147 @@ test_workspace_label_different_secondmates_get_different_labels() {
   pass "fm_backend_herdr_workspace_label: two different secondmate homes get two different, non-colliding labels"
 }
 
+# --- display-only labels and metadata ----------------------------------------
+
+test_display_name_from_task_label_strips_owner_and_fm_prefixes() {
+  local out
+  out=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_display_name_from_task_label fm-fm-crew-model-refresh' "$ROOT")
+  [ "$out" = "crew-model-refresh" ] || fail "display name did not strip duplicated fm- prefixes: $out"
+  out=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_display_name_from_task_label firstmate/fm-task-p2' "$ROOT")
+  [ "$out" = "task-p2" ] || fail "display name did not strip firstmate/ and fm- prefixes: $out"
+  out=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_display_name_from_task_label 2ndmate-dev-a1/fm-lane-7' "$ROOT")
+  [ "$out" = "lane-7" ] || fail "display name did not strip secondmate owner prefixes: $out"
+  pass "fm_backend_herdr_display_name_from_task_label: strips owner and duplicated fm- prefixes"
+}
+
+test_refresh_task_display_renames_pane_and_reports_workspace_fm_name() {
+  local dir log resp fb state meta_line model_line
+  dir="$TMP_ROOT/display-task-refresh"; mkdir -p "$dir/responses" "$dir/state"; log="$dir/log"; resp="$dir/responses"; : > "$log"
+  state="$dir/state"
+  fb=$(make_herdr_fakebin "$dir")
+  PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_STATE_OVERRIDE="$state" \
+    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_refresh_task_display lab w9:p2 w9 fm-fm-crew-model-refresh "" cursor-grok-4.6-high' "$ROOT" >/dev/null
+  expect_code 0 $? "display refresh should succeed"
+  assert_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''rename'$'\x1f''w9:p2'$'\x1f''└ crew-model-refresh' \
+    "display refresh did not rename the pane to the indented concise task name"
+  meta_line=$(awk -F$'\x1f' '$2 == "workspace" && $3 == "report-metadata" { print; exit }' "$log")
+  [ -n "$meta_line" ] || fail "display refresh did not publish workspace metadata"
+  case "$meta_line" in
+    *$'\x1f''--source'$'\x1f''fm-display-'*) ;;
+    *) fail "workspace metadata source did not use the display owner prefix: $meta_line" ;;
+  esac
+  case "$meta_line" in
+    *$'\x1f''--token'$'\x1f''fm_name=└ crew-model-refresh'*) ;;
+    *) fail "workspace metadata did not publish fm_name=└ crew-model-refresh: $meta_line" ;;
+  esac
+  case "$meta_line" in
+    *$'\x1f''--seq'$'\x1f''1'*) ;;
+    *) fail "workspace metadata did not start at seq=1: $meta_line" ;;
+  esac
+  model_line=$(awk -F$'\x1f' '$2 == "pane" && $3 == "report-metadata" { print; exit }' "$log")
+  [ -n "$model_line" ] || fail "display refresh did not publish pane metadata"
+  case "$model_line" in
+    *$'\x1f''--token'$'\x1f''model=cursor-grok-4.6-high'*) ;;
+    *) fail "pane metadata did not publish model=cursor-grok-4.6-high: $model_line" ;;
+  esac
+  case "$model_line" in
+    *$'\x1f''--seq'$'\x1f''2'*) ;;
+    *) fail "pane metadata did not advance seq to 2 after workspace metadata: $model_line" ;;
+  esac
+  pass "fm_backend_herdr_refresh_task_display: writes indented pane labels, fm_name, and model metadata with one owned source+sequence"
+}
+
+test_workspace_fm_name_metadata_sequence_is_monotonic_per_home() {
+  local dir log resp fb state seq_values source_values first_source second_source first_seq second_seq
+  dir="$TMP_ROOT/display-metadata-seq"; mkdir -p "$dir/responses" "$dir/state"; log="$dir/log"; resp="$dir/responses"; : > "$log"
+  state="$dir/state"
+  fb=$(make_herdr_fakebin "$dir")
+  PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_STATE_OVERRIDE="$state" \
+    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_workspace_report_fm_name lab w9 firstmate; fm_backend_herdr_workspace_report_fm_name lab w9 crew-model-refresh' "$ROOT" >/dev/null
+  expect_code 0 $? "workspace metadata reports should succeed"
+  seq_values=$(awk -F$'\x1f' '
+    $2 == "workspace" && $3 == "report-metadata" {
+      for (i = 1; i <= NF; i++) if ($i == "--seq") { print $(i + 1); break }
+    }
+  ' "$log")
+  source_values=$(awk -F$'\x1f' '
+    $2 == "workspace" && $3 == "report-metadata" {
+      for (i = 1; i <= NF; i++) if ($i == "--source") { print $(i + 1); break }
+    }
+  ' "$log")
+  first_seq=$(printf '%s\n' "$seq_values" | sed -n '1p')
+  second_seq=$(printf '%s\n' "$seq_values" | sed -n '2p')
+  first_source=$(printf '%s\n' "$source_values" | sed -n '1p')
+  second_source=$(printf '%s\n' "$source_values" | sed -n '2p')
+  [ "$first_seq" = 1 ] || fail "the first metadata update should use seq=1, got '$first_seq'"
+  [ "$second_seq" = 2 ] || fail "the second metadata update should use seq=2, got '$second_seq'"
+  [ -n "$first_source" ] || fail "workspace metadata source was empty on the first update"
+  [ "$first_source" = "$second_source" ] || fail "workspace metadata source changed between updates: '$first_source' vs '$second_source'"
+  pass "fm_backend_herdr_workspace_report_fm_name: keeps one source id and advances a monotonic per-home sequence"
+}
+
+test_refresh_primary_display_renames_firstmate_pane_and_reports_fm_name() {
+  local dir log resp fb state
+  dir="$TMP_ROOT/display-primary-refresh"; mkdir -p "$dir/responses" "$dir/state"; log="$dir/log"; resp="$dir/responses"; : > "$log"
+  state="$dir/state"
+  # 1: pane get for the inherited HERDR_PANE_ID.
+  printf '{"result":{"pane":{"pane_id":"w1:p2","workspace_id":"w1"}}}\n' > "$resp/1.out"
+  fb=$(make_herdr_fakebin "$dir")
+  PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_STATE_OVERRIDE="$state" \
+    HERDR_ENV=1 HERDR_SESSION=lab HERDR_PANE_ID=w1:p2 \
+    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_refresh_primary_display' "$ROOT" >/dev/null
+  expect_code 0 $? "primary display refresh should succeed"
+  assert_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''rename'$'\x1f''w1:p2'$'\x1f''firstmate' \
+    "primary display refresh did not rename the primary pane to firstmate"
+  assert_contains "$(cat "$log")" $'\x1f''workspace'$'\x1f''report-metadata' \
+    "primary display refresh did not publish workspace metadata"
+  assert_contains "$(cat "$log")" $'\x1f''--token'$'\x1f''fm_name=firstmate' \
+    "primary display refresh did not publish fm_name=firstmate"
+  assert_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''report-metadata' \
+    "primary display refresh did not publish pane metadata"
+  assert_contains "$(cat "$log")" $'\x1f''--clear-token'$'\x1f''model' \
+    "primary display refresh did not clear a stale primary model token when none is structurally proven"
+  pass "fm_backend_herdr_refresh_primary_display: refreshes firstmate labels and clears unknown primary model tokens"
+}
+
+test_refresh_task_display_warns_without_failing_spawn_paths() {
+  local dir log resp fb out status
+  dir="$TMP_ROOT/display-task-warning"; mkdir -p "$dir/responses" "$dir/state"; log="$dir/log"; resp="$dir/responses"; : > "$log"
+  printf '1\n' > "$resp/1.exit"
+  fb=$(make_herdr_fakebin "$dir")
+  out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_STATE_OVERRIDE="$dir/state" \
+    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_refresh_task_display lab w9:p2 w9 fm-task-z9' "$ROOT" 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "display refresh should return non-zero when a display call fails"
+  assert_contains "$out" "display-only pane rename" "display refresh failure did not report a useful warning"
+  assert_contains "$out" "authoritative endpoint labels unchanged" "display refresh warning did not name the preserved authority boundary"
+  assert_contains "$(cat "$log")" $'\x1f''workspace'$'\x1f''report-metadata' \
+    "display refresh should still attempt workspace metadata after a rename failure"
+  assert_contains "$(cat "$log")" $'\x1f''pane'$'\x1f''report-metadata' \
+    "display refresh should still attempt pane metadata after a rename failure"
+  pass "fm_backend_herdr_refresh_task_display: display-only failures warn clearly and never mutate authority paths"
+}
+
+test_refresh_task_display_updates_model_token_when_relaunch_changes_model() {
+  local dir log resp fb state model_lines first_model second_model
+  dir="$TMP_ROOT/display-model-relaunch"; mkdir -p "$dir/responses" "$dir/state"; log="$dir/log"; resp="$dir/responses"; : > "$log"
+  state="$dir/state"
+  fb=$(make_herdr_fakebin "$dir")
+  PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_STATE_OVERRIDE="$state" \
+    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_refresh_task_display lab w9:p2 w9 fm-task-r1 "└ task-r1" cursor-grok-4.6-high; fm_backend_herdr_refresh_task_display lab w9:p2 w9 fm-task-r1 "└ task-r1" cursor-grok-4.7-high' "$ROOT" >/dev/null
+  expect_code 0 $? "model refresh should succeed for both launches"
+  model_lines=$(awk -F$'\x1f' '
+    $2 == "pane" && $3 == "report-metadata" {
+      for (i = 1; i <= NF; i++) if ($i == "--token" && (i + 1) <= NF && index($(i + 1), "model=") == 1) { print $(i + 1); break }
+    }
+  ' "$log")
+  first_model=$(printf '%s\n' "$model_lines" | sed -n '1p')
+  second_model=$(printf '%s\n' "$model_lines" | sed -n '2p')
+  [ "$first_model" = "model=cursor-grok-4.6-high" ] || fail "first launch model token mismatch: $first_model"
+  [ "$second_model" = "model=cursor-grok-4.7-high" ] || fail "relaunch model token mismatch: $second_model"
+  pass "fm_backend_herdr_refresh_task_display: relaunch updates the pane model token to the new resolved model"
+}
+
 # --- fm_backend_herdr_cli: session targeting (2026-07-02 incident fix) -------
 
 test_cli_helper_sets_env_and_appends_trailing_session_flag() {
@@ -5212,6 +5353,12 @@ test_workspace_label_secondmate_home_uses_marker_id
 test_workspace_label_secondmate_marker_trims_whitespace
 test_workspace_label_empty_marker_falls_back_to_primary
 test_workspace_label_different_secondmates_get_different_labels
+test_display_name_from_task_label_strips_owner_and_fm_prefixes
+test_refresh_task_display_renames_pane_and_reports_workspace_fm_name
+test_workspace_fm_name_metadata_sequence_is_monotonic_per_home
+test_refresh_primary_display_renames_firstmate_pane_and_reports_fm_name
+test_refresh_task_display_warns_without_failing_spawn_paths
+test_refresh_task_display_updates_model_token_when_relaunch_changes_model
 test_cli_helper_sets_env_and_appends_trailing_session_flag
 test_agent_state_bypasses_a_stale_client_shadowing_a_compatible_one
 test_recovery_grade_read_widens_only_at_its_own_boundary
